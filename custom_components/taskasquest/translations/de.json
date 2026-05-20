@@ -3,9 +3,9 @@
     "step": {
       "user": {
         "title": "Task as Quest - Login",
-        "description": "Verbinde Home Assistant mit deinem Task as Quest Account.",
+        "description": "Verbinde Home Assistant mit deinem Task as Quest Account. Format: Name#0001 (vierstellige Nummer).",
         "data": {
-          "login_name": "Login-Name",
+          "login_name": "Login-Name (Name#0001)",
           "password": "Passwort",
           "recovery_code": "Verschluesselungscode",
           "totp_code": "2FA-Code (falls aktiv)"
