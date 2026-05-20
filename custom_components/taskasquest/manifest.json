@@ -1,0 +1,12 @@
+{
+  "domain": "taskasquest",
+  "name": "Task as Quest",
+  "codeowners": ["@marcohildebrandtmail-hub"],
+  "config_flow": true,
+  "documentation": "https://github.com/marcohildebrandtmail-hub/questastask",
+  "integration_type": "service",
+  "iot_class": "local_polling",
+  "options_flow": true,
+  "requirements": ["aiohttp"],
+  "version": "1.0.0"
+}

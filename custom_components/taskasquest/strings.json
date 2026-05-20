@@ -1,0 +1,48 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Task as Quest — Login",
+        "description": "Connect to your Task as Quest account via PocketBase.",
+        "data": {
+          "pocketbase_url": "PocketBase URL",
+          "email": "Email",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "auth_failed": "Authentication failed. Check URL, email, and password."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Task as Quest — Rules",
+        "menu_options": {
+          "list_rules": "Manage existing rules",
+          "add_rule": "Add new rule"
+        }
+      },
+      "add_rule": {
+        "title": "Add automation rule",
+        "description": "When entity meets condition, a quest is created. Cooldown prevents duplicates ({cooldown_hint}).",
+        "data": {
+          "entity_id": "Entity",
+          "condition": "Condition",
+          "value": "Threshold value",
+          "task_title": "Quest title",
+          "difficulty": "Difficulty",
+          "cooldown": "Cooldown (minutes)"
+        }
+      },
+      "list_rules": {
+        "title": "Manage rules",
+        "description": "Select a rule to delete it.",
+        "data": {
+          "action": "Action"
+        }
+      }
+    }
+  }
+}

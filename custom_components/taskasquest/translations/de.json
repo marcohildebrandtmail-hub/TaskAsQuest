@@ -1,0 +1,48 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Task as Quest — Anmeldung",
+        "description": "Verbinde dich mit deinem Task as Quest Konto über PocketBase.",
+        "data": {
+          "pocketbase_url": "PocketBase URL",
+          "email": "E-Mail",
+          "password": "Passwort"
+        }
+      }
+    },
+    "error": {
+      "auth_failed": "Anmeldung fehlgeschlagen. Prüfe URL, E-Mail und Passwort."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Task as Quest — Regeln",
+        "menu_options": {
+          "list_rules": "Vorhandene Regeln verwalten",
+          "add_rule": "Neue Regel hinzufügen"
+        }
+      },
+      "add_rule": {
+        "title": "Automatisierungsregel hinzufügen",
+        "description": "Wenn eine Entität die Bedingung erfüllt, wird ein Quest erstellt. Der Cooldown verhindert Duplikate ({cooldown_hint}).",
+        "data": {
+          "entity_id": "Entität",
+          "condition": "Bedingung",
+          "value": "Schwellwert",
+          "task_title": "Quest-Titel",
+          "difficulty": "Schwierigkeit",
+          "cooldown": "Cooldown (Minuten)"
+        }
+      },
+      "list_rules": {
+        "title": "Regeln verwalten",
+        "description": "Wähle eine Regel zum Löschen.",
+        "data": {
+          "action": "Aktion"
+        }
+      }
+    }
+  }
+}
