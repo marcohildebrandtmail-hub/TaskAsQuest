@@ -1,10 +1,12 @@
 """Task as Quest — Home Assistant Integration."""
 
 import logging
+import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.helpers import config_validation as cv
 
 from .const import (
     CONF_AUTH_TOKEN,
@@ -20,7 +22,16 @@ from .pocketbase_client import PocketBaseClient
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.SENSOR]
+PLATFORMS = [Platform.SENSOR, Platform.TODO]
+
+SERVICE_CREATE_QUEST = "create_quest"
+SERVICE_SCHEMA_CREATE_QUEST = vol.Schema(
+    {
+        vol.Required("title"): cv.string,
+        vol.Optional("difficulty", default="medium"): vol.In(["easy", "medium", "hard", "epic"]),
+        vol.Optional("description"): cv.string,
+    }
+)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -55,11 +66,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
 
     rules = entry.options.get(CONF_RULES, [])
-    coordinator = TaskAsQuestCoordinator(hass, client, rules)
+    coordinator = TaskAsQuestCoordinator(hass, entry, client, rules)
 
     await coordinator.async_config_entry_first_refresh()
 
     hass.data[DOMAIN][entry.entry_id] = coordinator
+
+    async def handle_create_quest(call: ServiceCall) -> None:
+        """Handle the service call."""
+        await client.create_task(
+            title=call.data["title"],
+            difficulty=call.data["difficulty"],
+            description=call.data.get("description"),
+        )
+        await coordinator.async_refresh()
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_CREATE_QUEST,
+        handle_create_quest,
+        schema=SERVICE_SCHEMA_CREATE_QUEST,
+    )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 

@@ -28,84 +28,82 @@ class PocketBaseClient:
             headers["Authorization"] = self.token
         return headers
 
-    async def authenticate(self, email: str, password: str) -> bool:
-        """Login with email/password. Returns True on success."""
+    async def _request(
+        self,
+        method: str,
+        path: str,
+        json: dict | None = None,
+        params: dict | None = None,
+    ) -> dict | None:
+        """Central request handler."""
         session = await self._get_session()
-        url = f"{self.base_url}/api/collections/taq_users/auth-with-password"
+        url = f"{self.base_url}/{path.lstrip('/')}"
         try:
-            async with session.post(
-                url,
-                json={"identity": email, "password": password},
-                headers={"Content-Type": "application/json"},
+            async with session.request(
+                method, url, json=json, params=params, headers=self._headers()
             ) as resp:
-                if resp.status != 200:
-                    _LOGGER.error("PocketBase auth failed: %s", resp.status)
-                    return False
-                data = await resp.json()
-                self.token = data.get("token")
-                record = data.get("record", {})
-                self.user_id = record.get("id")
-                _LOGGER.info("PocketBase auth OK, user_id=%s", self.user_id)
-                return True
+                if resp.status in {200, 201}:
+                    return await resp.json()
+                _LOGGER.error("PocketBase request failed (%s): %s", resp.status, url)
+                return None
         except aiohttp.ClientError as err:
             _LOGGER.error("PocketBase connection error: %s", err)
-            return False
+            return None
+
+    async def authenticate(self, email: str, password: str) -> bool:
+        """Login with email/password. Returns True on success."""
+        data = await self._request(
+            "POST",
+            "api/collections/taq_users/auth-with-password",
+            json={"identity": email, "password": password},
+        )
+        if data:
+            self.token = data.get("token")
+            record = data.get("record", {})
+            self.user_id = record.get("id")
+            _LOGGER.info("PocketBase auth OK, user_id=%s", self.user_id)
+            return True
+        return False
 
     async def authenticate_with_token(self, token: str, user_id: str) -> bool:
         """Re-authenticate with stored token."""
         self.token = token
         self.user_id = user_id
-        session = await self._get_session()
-        url = f"{self.base_url}/api/collections/taq_users/auth-refresh"
-        try:
-            async with session.post(url, headers=self._headers()) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    self.token = data.get("token", token)
-                    return True
-                _LOGGER.warning("Token refresh failed (%s), re-auth needed", resp.status)
-                return False
-        except aiohttp.ClientError:
-            return False
+        data = await self._request("POST", "api/collections/taq_users/auth-refresh")
+        if data:
+            self.token = data.get("token", token)
+            return True
+        _LOGGER.warning("Token refresh failed, re-auth needed")
+        return False
 
     async def get_open_tasks(self) -> list[dict]:
         """Get all open tasks for user."""
         if not self.user_id:
             return []
-        session = await self._get_session()
-        url = f"{self.base_url}/api/collections/taq_tasks/records"
-        params = {
-            "filter": f'user="{self.user_id}" && status="open"',
-            "perPage": 500,
-        }
-        try:
-            async with session.get(url, params=params, headers=self._headers()) as resp:
-                if resp.status != 200:
-                    return []
-                data = await resp.json()
-                return data.get("items", [])
-        except aiohttp.ClientError:
-            return []
+        data = await self._request(
+            "GET",
+            "api/collections/taq_tasks/records",
+            params={
+                "filter": f'user="{self.user_id}" && status="open"',
+                "perPage": 500,
+            },
+        )
+        return data.get("items", []) if data else []
 
     async def find_task_by_title(self, title: str) -> dict | None:
         """Find open task with exact title."""
         if not self.user_id:
             return None
-        session = await self._get_session()
-        url = f"{self.base_url}/api/collections/taq_tasks/records"
-        params = {
-            "filter": f'user="{self.user_id}" && status="open" && title="{title}"',
-            "perPage": 1,
-        }
-        try:
-            async with session.get(url, params=params, headers=self._headers()) as resp:
-                if resp.status != 200:
-                    return None
-                data = await resp.json()
-                items = data.get("items", [])
-                return items[0] if items else None
-        except aiohttp.ClientError:
-            return None
+        data = await self._request(
+            "GET",
+            "api/collections/taq_tasks/records",
+            params={
+                "filter": f'user="{self.user_id}" && status="open" && title="{title}"',
+                "perPage": 1,
+            },
+        )
+        items = data.get("items", []) if data else []
+        return items[0] if items else None
 
     async def create_task(
         self,
@@ -117,8 +115,6 @@ class PocketBaseClient:
         """Create a new task. Returns the created record or None."""
         if not self.user_id:
             return None
-        session = await self._get_session()
-        url = f"{self.base_url}/api/collections/taq_tasks/records"
         payload: dict = {
             "user": self.user_id,
             "title": title,
@@ -131,19 +127,18 @@ class PocketBaseClient:
         if due_date:
             payload["due_date"] = due_date
         else:
-            # Faellig heute
             payload["due_date"] = datetime.now().strftime("%Y-%m-%d 12:00:00.000Z")
-        try:
-            async with session.post(url, json=payload, headers=self._headers()) as resp:
-                if resp.status == 200:
-                    task = await resp.json()
-                    _LOGGER.info("Task created: %s", title)
-                    return task
-                _LOGGER.error("Task creation failed: %s", resp.status)
-                return None
-        except aiohttp.ClientError as err:
-            _LOGGER.error("Task creation error: %s", err)
-            return None
+        
+        return await self._request("POST", "api/collections/taq_tasks/records", json=payload)
+
+    async def update_task_status(self, task_id: str, status: str) -> bool:
+        """Update the status of a task (e.g., 'completed')."""
+        data = await self._request(
+            "PATCH",
+            f"api/collections/taq_tasks/records/{task_id}",
+            json={"status": status},
+        )
+        return data is not None
 
     async def close(self) -> None:
         """Close the session."""

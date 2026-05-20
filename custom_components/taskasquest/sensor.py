@@ -1,5 +1,8 @@
 """Sensor platform for Task as Quest."""
 
+from datetime import timedelta
+from typing import Any
+
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -26,13 +29,31 @@ async def async_setup_entry(
     )
 
 
-class OpenTasksSensor(CoordinatorEntity, SensorEntity):
+class TaskAsQuestEntity(CoordinatorEntity[TaskAsQuestCoordinator]):
+    """Base entity for Task as Quest."""
+
+    _attr_has_entity_name = True
+
+    @property
+    def device_info(self) -> dict[str, Any]:
+        """Return device information."""
+        return {
+            "identifiers": {(DOMAIN, self.coordinator.config_entry.entry_id)},
+            "name": "Task as Quest",
+            "manufacturer": "Marco Hildebrandt",
+            "model": "RPG Todo Integration",
+        }
+
+
+class OpenTasksSensor(TaskAsQuestEntity, SensorEntity):
     """Number of open tasks."""
+
+    _attr_state_class = "measurement"
 
     def __init__(self, coordinator: TaskAsQuestCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_open_tasks"
-        self._attr_name = "Task as Quest — Offene Quests"
+        self._attr_name = "Offene Quests"
         self._attr_icon = "mdi:sword-cross"
         self._attr_native_unit_of_measurement = "Quests"
 
@@ -41,13 +62,13 @@ class OpenTasksSensor(CoordinatorEntity, SensorEntity):
         return self.coordinator.open_task_count
 
 
-class TasksCreatedSensor(CoordinatorEntity, SensorEntity):
+class TasksCreatedSensor(TaskAsQuestEntity, SensorEntity):
     """Total tasks created by automation."""
 
     def __init__(self, coordinator: TaskAsQuestCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_tasks_created"
-        self._attr_name = "Task as Quest — Erstellte Quests"
+        self._attr_name = "Erstellte Quests"
         self._attr_icon = "mdi:creation"
         self._attr_native_unit_of_measurement = "Quests"
 
@@ -60,13 +81,15 @@ class TasksCreatedSensor(CoordinatorEntity, SensorEntity):
         return {"last_task": self.coordinator.last_task_created}
 
 
-class ActiveRulesSensor(CoordinatorEntity, SensorEntity):
+class ActiveRulesSensor(TaskAsQuestEntity, SensorEntity):
     """Number of active rules."""
+
+    _attr_state_class = "measurement"
 
     def __init__(self, coordinator: TaskAsQuestCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_active_rules"
-        self._attr_name = "Task as Quest — Aktive Regeln"
+        self._attr_name = "Aktive Regeln"
         self._attr_icon = "mdi:cog"
         self._attr_native_unit_of_measurement = "Regeln"
 

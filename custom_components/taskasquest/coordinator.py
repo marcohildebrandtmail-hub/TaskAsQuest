@@ -31,6 +31,7 @@ class TaskAsQuestCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def __init__(
         self,
         hass: HomeAssistant,
+        entry: ConfigEntry,
         client: PocketBaseClient,
         rules: list[dict[str, Any]] | None,
     ) -> None:
@@ -40,6 +41,7 @@ class TaskAsQuestCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             name=DOMAIN,
             update_interval=timedelta(seconds=DEFAULT_SCAN_INTERVAL),
         )
+        self.config_entry = entry
         self.client = client
         self.rules = rules or []
         self.open_task_count = 0

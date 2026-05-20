@@ -3,44 +3,57 @@
     "step": {
       "user": {
         "title": "Task as Quest — Login",
-        "description": "Connect to your Task as Quest account via PocketBase.",
+        "description": "Verbinde dich mit deinem Task as Quest Account via PocketBase.",
         "data": {
           "pocketbase_url": "PocketBase URL",
-          "email": "Email",
-          "password": "Password"
+          "email": "E-Mail",
+          "password": "Passwort"
         }
       }
     },
     "error": {
-      "auth_failed": "Authentication failed. Check URL, email, and password."
+      "auth_failed": "Authentifizierung fehlgeschlagen. Prüfe URL, E-Mail und Passwort."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Task as Quest — Rules",
+        "title": "Task as Quest — Regeln",
         "menu_options": {
-          "list_rules": "Manage existing rules",
-          "add_rule": "Add new rule"
+          "manage_rules": "Regeln verwalten / bearbeiten",
+          "add_rule": "Neue Regel hinzufügen"
         }
       },
       "add_rule": {
-        "title": "Add automation rule",
-        "description": "When entity meets condition, a quest is created. Cooldown prevents duplicates ({cooldown_hint}).",
+        "title": "Automatisierung hinzufügen",
+        "description": "Wenn die Entität die Bedingung erfüllt, wird eine Quest erstellt.",
         "data": {
-          "entity_id": "Entity",
-          "condition": "Condition",
-          "value": "Threshold value",
-          "task_title": "Quest title",
-          "difficulty": "Difficulty",
-          "cooldown": "Cooldown (minutes)"
+          "entity_id": "Entität",
+          "condition": "Bedingung",
+          "value": "Schwellenwert",
+          "task_title": "Quest-Titel",
+          "difficulty": "Schwierigkeit",
+          "cooldown": "Cooldown (Minuten)"
         }
       },
-      "list_rules": {
-        "title": "Manage rules",
-        "description": "Select a rule to delete it.",
+      "manage_rules": {
+        "title": "Regeln verwalten",
+        "description": "Wähle eine Regel aus der Liste aus, um sie zu bearbeiten oder zu löschen.",
         "data": {
-          "action": "Action"
+          "rule_index": "Bestehende Regeln"
+        }
+      },
+      "edit_rule": {
+        "title": "Regel bearbeiten",
+        "description": "Passe die Parameter der Regel an oder lösche sie komplett.",
+        "data": {
+          "entity_id": "Entität",
+          "condition": "Bedingung",
+          "value": "Schwellenwert",
+          "task_title": "Quest-Titel",
+          "difficulty": "Schwierigkeit",
+          "cooldown": "Cooldown (Minuten)",
+          "delete_rule": "Diese Regel löschen"
         }
       }
     }

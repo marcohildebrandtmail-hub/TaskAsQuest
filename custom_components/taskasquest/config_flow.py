@@ -8,6 +8,7 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.core import callback
+from homeassistant.helpers import selector
 
 from .const import (
     CONDITIONS,
@@ -89,6 +90,7 @@ class TaskAsQuestOptionsFlow(config_entries.OptionsFlow):
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         self._config_entry = config_entry
         self._rules = list(config_entry.options.get(CONF_RULES, []))
+        self._selected_rule_index: int | None = None
 
     async def async_step_init(
         self,
@@ -97,7 +99,7 @@ class TaskAsQuestOptionsFlow(config_entries.OptionsFlow):
         """Show the options menu."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=["add_rule", "list_rules"],
+            menu_options=["add_rule", "manage_rules"],
         )
 
     async def async_step_add_rule(
@@ -118,7 +120,7 @@ class TaskAsQuestOptionsFlow(config_entries.OptionsFlow):
             step_id="add_rule",
             data_schema=vol.Schema(
                 {
-                    vol.Required(RULE_ENTITY_ID): str,
+                    vol.Required(RULE_ENTITY_ID): selector.EntitySelector(),
                     vol.Required(RULE_CONDITION, default="below"): vol.In(CONDITIONS),
                     vol.Required(RULE_VALUE): str,
                     vol.Required(RULE_TASK_TITLE): str,
@@ -126,35 +128,71 @@ class TaskAsQuestOptionsFlow(config_entries.OptionsFlow):
                     vol.Required(RULE_COOLDOWN, default=DEFAULT_COOLDOWN): int,
                 }
             ),
-            description_placeholders={
-                "cooldown_hint": f"default: {DEFAULT_COOLDOWN} minutes"
-            },
         )
 
-    async def async_step_list_rules(
+    async def async_step_manage_rules(
         self,
         user_input: dict[str, Any] | None = None,
     ) -> config_entries.ConfigFlowResult:
-        """Delete an existing rule."""
+        """List and select a rule to edit or delete."""
         if user_input is not None:
-            action = user_input.get("action", "")
-            if action.startswith("delete_"):
-                index = int(action.removeprefix("delete_"))
-                if 0 <= index < len(self._rules):
-                    self._rules.pop(index)
+            if user_input["rule_index"] == "none":
+                return await self.async_step_init()
+            
+            self._selected_rule_index = int(user_input["rule_index"])
+            return await self.async_step_edit_rule()
+
+        options = {
+            str(index): f"{rule.get(RULE_TASK_TITLE, 'Quest')} ({rule.get(RULE_ENTITY_ID)})"
+            for index, rule in enumerate(self._rules)
+        }
+        if not options:
+            options = {"none": "Keine Regeln konfiguriert"}
+
+        return self.async_show_form(
+            step_id="manage_rules",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("rule_index"): vol.In(options),
+                }
+            ),
+        )
+
+    async def async_step_edit_rule(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> config_entries.ConfigFlowResult:
+        """Edit or delete the selected rule."""
+        if self._selected_rule_index is None:
+            return await self.async_step_manage_rules()
+
+        rule = self._rules[self._selected_rule_index]
+
+        if user_input is not None:
+            if user_input.get("delete_rule"):
+                self._rules.pop(self._selected_rule_index)
+            else:
+                updated_rule = dict(user_input)
+                updated_rule.pop("delete_rule", None)
+                updated_rule[RULE_ENABLED] = True
+                self._rules[self._selected_rule_index] = updated_rule
+            
             return self.async_create_entry(
                 title="",
                 data={CONF_RULES: self._rules},
             )
 
-        actions = {
-            f"delete_{index}": f"Delete: {rule.get(RULE_TASK_TITLE, 'Rule')}"
-            for index, rule in enumerate(self._rules)
-        }
-        if not actions:
-            actions = {"none": "No rules configured"}
-
         return self.async_show_form(
-            step_id="list_rules",
-            data_schema=vol.Schema({vol.Required("action"): vol.In(actions)}),
+            step_id="edit_rule",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(RULE_ENTITY_ID, default=rule.get(RULE_ENTITY_ID)): selector.EntitySelector(),
+                    vol.Required(RULE_CONDITION, default=rule.get(RULE_CONDITION, "below")): vol.In(CONDITIONS),
+                    vol.Required(RULE_VALUE, default=rule.get(RULE_VALUE)): str,
+                    vol.Required(RULE_TASK_TITLE, default=rule.get(RULE_TASK_TITLE)): str,
+                    vol.Required(RULE_DIFFICULTY, default=rule.get(RULE_DIFFICULTY, "medium")): vol.In(DIFFICULTIES),
+                    vol.Required(RULE_COOLDOWN, default=rule.get(RULE_COOLDOWN, DEFAULT_COOLDOWN)): int,
+                    vol.Optional("delete_rule", default=False): bool,
+                }
+            ),
         )
