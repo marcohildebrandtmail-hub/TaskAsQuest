@@ -13,6 +13,7 @@ from .const import (
     CONF_EMAIL,
     CONF_PASSWORD,
     CONF_PB_URL,
+    CONF_RECOVERY_CODE,
     CONF_RULES,
     CONF_USER_ID,
     DOMAIN,
@@ -56,6 +57,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     if not authenticated:
         _LOGGER.error("Task as Quest: Authentifizierung fehlgeschlagen")
+        await client.close()
+        return False
+
+    if not client.unlock_task_crypto(entry.data.get(CONF_RECOVERY_CODE, "")):
+        _LOGGER.error("Task as Quest: Verschluesselungs-Code fehlt oder ist ungueltig")
         await client.close()
         return False
 

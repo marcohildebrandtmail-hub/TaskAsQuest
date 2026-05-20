@@ -7,12 +7,15 @@
         "data": {
           "pocketbase_url": "PocketBase URL",
           "email": "Email",
-          "password": "Password"
+          "password": "Password",
+          "recovery_code": "Recovery/encryption code"
         }
       }
     },
     "error": {
-      "auth_failed": "Authentication failed. Check URL, email, and password."
+      "auth_failed": "Authentication failed. Check URL, email, and password.",
+      "recovery_code_required": "This account uses encrypted quests. Enter the recovery code.",
+      "recovery_code_invalid": "The recovery code is invalid or does not belong to this account."
     }
   },
   "options": {

@@ -15,6 +15,7 @@ from .const import (
     CONF_EMAIL,
     CONF_PASSWORD,
     CONF_PB_URL,
+    CONF_RECOVERY_CODE,
     CONF_RULES,
     DEFAULT_COOLDOWN,
     DIFFICULTIES,
@@ -44,24 +45,36 @@ class TaskAsQuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             client = PocketBaseClient(user_input[CONF_PB_URL])
-            try:
-                authenticated = await client.authenticate(
-                    user_input[CONF_EMAIL],
-                    user_input[CONF_PASSWORD],
-                )
-            finally:
-                await client.close()
+            authenticated = await client.authenticate(
+                user_input[CONF_EMAIL],
+                user_input[CONF_PASSWORD],
+            )
 
             if authenticated:
-                await self.async_set_unique_id(user_input[CONF_EMAIL])
-                self._abort_if_unique_id_configured()
-                return self.async_create_entry(
-                    title="Task as Quest",
-                    data=user_input,
-                    options={CONF_RULES: []},
-                )
+                can_create = False
+                if client.crypto_version == 1:
+                    recovery_code = user_input.get(CONF_RECOVERY_CODE, "")
+                    if not recovery_code:
+                        errors["base"] = "recovery_code_required"
+                    elif not client.unlock_task_crypto(recovery_code):
+                        errors["base"] = "recovery_code_invalid"
+                    else:
+                        can_create = True
+                else:
+                    can_create = True
 
-            errors["base"] = "auth_failed"
+                await client.close()
+                if can_create:
+                    await self.async_set_unique_id(user_input[CONF_EMAIL])
+                    self._abort_if_unique_id_configured()
+                    return self.async_create_entry(
+                        title="Task as Quest",
+                        data=user_input,
+                        options={CONF_RULES: []},
+                    )
+            else:
+                errors["base"] = "auth_failed"
+                await client.close()
 
         return self.async_show_form(
             step_id="user",
@@ -69,7 +82,12 @@ class TaskAsQuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 {
                     vol.Required(CONF_PB_URL): str,
                     vol.Required(CONF_EMAIL): str,
-                    vol.Required(CONF_PASSWORD): str,
+                    vol.Required(CONF_PASSWORD): selector.TextSelector(
+                        selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+                    ),
+                    vol.Optional(CONF_RECOVERY_CODE): selector.TextSelector(
+                        selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+                    ),
                 }
             ),
             errors=errors,

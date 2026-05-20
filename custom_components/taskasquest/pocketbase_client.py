@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 
 import aiohttp
 
+from .task_crypto import TaskCrypto, TaskCryptoError
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -16,6 +18,8 @@ class PocketBaseClient:
         self.token: str | None = None
         self.user_id: str | None = None
         self.crypto_version: int = 0
+        self.user_record: dict | None = None
+        self.task_crypto: TaskCrypto | None = None
         self._session: aiohttp.ClientSession | None = None
 
     async def _get_session(self) -> aiohttp.ClientSession:
@@ -69,6 +73,7 @@ class PocketBaseClient:
         if data:
             self.token = data.get("token")
             record = data.get("record", {})
+            self.user_record = record
             self.user_id = record.get("id")
             self.crypto_version = int(record.get("crypto_version") or 0)
             _LOGGER.info("PocketBase auth OK, user_id=%s", self.user_id)
@@ -83,11 +88,27 @@ class PocketBaseClient:
         if data:
             self.token = data.get("token", token)
             record = data.get("record", {})
+            self.user_record = record
             self.user_id = record.get("id", user_id)
             self.crypto_version = int(record.get("crypto_version") or 0)
             return True
         _LOGGER.warning("Token refresh failed, re-auth needed")
         return False
+
+    def unlock_task_crypto(self, recovery_code: str | None) -> bool:
+        """Unlock encrypted task support with the user's recovery code."""
+        if self.crypto_version != 1:
+            self.task_crypto = None
+            return True
+        if not self.user_record or not recovery_code:
+            return False
+        try:
+            self.task_crypto = TaskCrypto.from_user_record(self.user_record, recovery_code)
+        except TaskCryptoError as err:
+            _LOGGER.error("Task as Quest crypto unlock failed: %s", err)
+            self.task_crypto = None
+            return False
+        return True
 
     async def get_open_tasks(self) -> list[dict]:
         """Get all open tasks for user."""
@@ -102,11 +123,19 @@ class PocketBaseClient:
                 "perPage": 500,
             },
         )
-        return data.get("items", []) if data else []
+        tasks = data.get("items", []) if data else []
+        if self.crypto_version == 1 and self.task_crypto:
+            return [self.task_crypto.decrypt_task_read(task) for task in tasks]
+        return tasks
 
     async def find_task_by_title(self, title: str) -> dict | None:
         """Find open task with exact title."""
         if not self.user_id:
+            return None
+        if self.crypto_version == 1:
+            for task in await self.get_open_tasks():
+                if task.get("title") == title:
+                    return task
             return None
         user_id = self._escape_filter_value(self.user_id)
         escaped_title = self._escape_filter_value(title)
@@ -132,11 +161,27 @@ class PocketBaseClient:
         if not self.user_id:
             return None
         if self.crypto_version == 1:
-            _LOGGER.error(
-                "Task as Quest account uses encrypted quests. "
-                "Refusing to create plaintext task from Home Assistant."
-            )
-            return None
+            if not self.task_crypto:
+                _LOGGER.error("Task as Quest crypto is locked; cannot create encrypted task")
+                return None
+            payload: dict = {
+                "user": self.user_id,
+                **self.task_crypto.encrypt_task_write(
+                    {
+                        "title": title,
+                        "description": description,
+                        "original_task": title,
+                        "user_description": description,
+                    }
+                ),
+                "difficulty": difficulty,
+                "status": "open",
+                "is_recurring": False,
+                "recurrence_rule": None,
+                "due_date": due_date,
+                "has_time": bool(due_date and "T" in due_date),
+            }
+            return await self._request("POST", "api/collections/taq_tasks/records", json=payload)
         payload: dict = {
             "user": self.user_id,
             "title": title,
@@ -146,6 +191,7 @@ class PocketBaseClient:
             "status": "open",
             "is_recurring": False,
             "recurrence_rule": None,
+            "has_time": bool(due_date and "T" in due_date),
         }
         if description:
             payload["description"] = description
