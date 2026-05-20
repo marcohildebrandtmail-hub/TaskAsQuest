@@ -12,11 +12,12 @@ from homeassistant.helpers import selector
 
 from .const import (
     CONDITIONS,
-    CONF_EMAIL,
+    CONF_LOGIN_NAME,
     CONF_PASSWORD,
-    CONF_PB_URL,
     CONF_RECOVERY_CODE,
     CONF_RULES,
+    CONF_TOTP_CODE,
+    DEFAULT_PB_URL,
     DEFAULT_COOLDOWN,
     DIFFICULTIES,
     DOMAIN,
@@ -44,10 +45,11 @@ class TaskAsQuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            client = PocketBaseClient(user_input[CONF_PB_URL])
-            authenticated = await client.authenticate(
-                user_input[CONF_EMAIL],
+            client = PocketBaseClient(DEFAULT_PB_URL)
+            authenticated = await client.authenticate_login_name(
+                user_input[CONF_LOGIN_NAME],
                 user_input[CONF_PASSWORD],
+                user_input.get(CONF_TOTP_CODE),
             )
 
             if authenticated:
@@ -65,11 +67,17 @@ class TaskAsQuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
                 await client.close()
                 if can_create:
-                    await self.async_set_unique_id(user_input[CONF_EMAIL])
+                    await self.async_set_unique_id(client.user_id)
                     self._abort_if_unique_id_configured()
+                    entry_data = dict(user_input)
+                    entry_data.pop(CONF_TOTP_CODE, None)
                     return self.async_create_entry(
                         title="Task as Quest",
-                        data=user_input,
+                        data={
+                            **entry_data,
+                            "user_id": client.user_id,
+                            "auth_token": client.token,
+                        },
                         options={CONF_RULES: []},
                     )
             else:
@@ -80,14 +88,14 @@ class TaskAsQuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_PB_URL): str,
-                    vol.Required(CONF_EMAIL): str,
+                    vol.Required(CONF_LOGIN_NAME): str,
                     vol.Required(CONF_PASSWORD): selector.TextSelector(
                         selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
                     ),
                     vol.Optional(CONF_RECOVERY_CODE): selector.TextSelector(
                         selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
                     ),
+                    vol.Optional(CONF_TOTP_CODE): str,
                 }
             ),
             errors=errors,

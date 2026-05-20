@@ -2,34 +2,34 @@
   "config": {
     "step": {
       "user": {
-        "title": "Task as Quest — Login",
-        "description": "Connect to your Task as Quest account via PocketBase.",
+        "title": "Task as Quest - Login",
+        "description": "Connect Home Assistant to your Task as Quest account.",
         "data": {
-          "pocketbase_url": "PocketBase URL",
-          "email": "Email",
+          "login_name": "Login name",
           "password": "Password",
-          "recovery_code": "Recovery/encryption code"
+          "recovery_code": "Encryption code",
+          "totp_code": "2FA code (if enabled)"
         }
       }
     },
     "error": {
-      "auth_failed": "Authentication failed. Check URL, email, and password.",
-      "recovery_code_required": "This account uses encrypted quests. Enter the recovery code.",
-      "recovery_code_invalid": "The recovery code is invalid or does not belong to this account."
+      "auth_failed": "Authentication failed. Check login name, password, and 2FA code if enabled.",
+      "recovery_code_required": "This account uses encrypted quests. Enter the encryption code.",
+      "recovery_code_invalid": "The encryption code is invalid or does not belong to this account."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Task as Quest — Rules",
+        "title": "Task as Quest - Rules",
         "menu_options": {
-          "list_rules": "Manage existing rules",
+          "manage_rules": "Manage / edit rules",
           "add_rule": "Add new rule"
         }
       },
       "add_rule": {
         "title": "Add automation rule",
-        "description": "When entity meets condition, a quest is created. Cooldown prevents duplicates ({cooldown_hint}).",
+        "description": "When the entity matches the condition, a quest is created.",
         "data": {
           "entity_id": "Entity",
           "condition": "Condition",
@@ -39,11 +39,24 @@
           "cooldown": "Cooldown (minutes)"
         }
       },
-      "list_rules": {
+      "manage_rules": {
         "title": "Manage rules",
-        "description": "Select a rule to delete it.",
+        "description": "Choose a rule from the list to edit or delete it.",
         "data": {
-          "action": "Action"
+          "rule_index": "Existing rules"
+        }
+      },
+      "edit_rule": {
+        "title": "Edit rule",
+        "description": "Change the rule parameters or delete it.",
+        "data": {
+          "entity_id": "Entity",
+          "condition": "Condition",
+          "value": "Threshold value",
+          "task_title": "Quest title",
+          "difficulty": "Difficulty",
+          "cooldown": "Cooldown (minutes)",
+          "delete_rule": "Delete this rule"
         }
       }
     }

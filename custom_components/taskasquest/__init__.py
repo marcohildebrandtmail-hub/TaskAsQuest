@@ -10,12 +10,12 @@ from homeassistant.helpers import config_validation as cv
 
 from .const import (
     CONF_AUTH_TOKEN,
-    CONF_EMAIL,
     CONF_PASSWORD,
-    CONF_PB_URL,
+    CONF_LOGIN_NAME,
     CONF_RECOVERY_CODE,
     CONF_RULES,
     CONF_USER_ID,
+    DEFAULT_PB_URL,
     DOMAIN,
 )
 from .coordinator import TaskAsQuestCoordinator
@@ -40,7 +40,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Task as Quest from config entry."""
     hass.data.setdefault(DOMAIN, {})
 
-    client = PocketBaseClient(entry.data[CONF_PB_URL])
+    client = PocketBaseClient(DEFAULT_PB_URL)
 
     # Erst Token probieren, dann Passwort
     token = entry.data.get(CONF_AUTH_TOKEN, "")
@@ -51,8 +51,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         authenticated = await client.authenticate_with_token(token, user_id)
 
     if not authenticated:
-        authenticated = await client.authenticate(
-            entry.data[CONF_EMAIL], entry.data[CONF_PASSWORD]
+        login_name = entry.data.get(CONF_LOGIN_NAME) or entry.data.get("email", "")
+        authenticated = await client.authenticate_login_name(
+            login_name, entry.data[CONF_PASSWORD]
         )
 
     if not authenticated:

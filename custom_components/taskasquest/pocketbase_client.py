@@ -80,6 +80,48 @@ class PocketBaseClient:
             return True
         return False
 
+    async def authenticate_login_name(
+        self,
+        login_name: str,
+        password: str,
+        totp_code: str | None = None,
+    ) -> bool:
+        """Login with the app's username#number login identifier."""
+        login_name = login_name.strip()
+        if "@" in login_name:
+            return await self.authenticate(login_name, password)
+
+        display_base = login_name
+        display_number = ""
+        if "#" in login_name:
+            display_base, display_number = login_name.rsplit("#", 1)
+
+        if display_number:
+            display_number = display_number.zfill(4)
+
+        payload = {
+            "display_base": display_base.strip(),
+            "display_number": display_number.strip(),
+            "password": password,
+        }
+        if totp_code:
+            payload["totp"] = totp_code.strip()
+
+        data = await self._request(
+            "POST",
+            "api/taq/login-bn",
+            json=payload,
+        )
+        if data and data.get("token") and data.get("record"):
+            self.token = data.get("token")
+            record = data.get("record", {})
+            self.user_record = record
+            self.user_id = record.get("id")
+            self.crypto_version = int(record.get("crypto_version") or 0)
+            _LOGGER.info("Task as Quest login OK, user_id=%s", self.user_id)
+            return True
+        return False
+
     async def authenticate_with_token(self, token: str, user_id: str) -> bool:
         """Re-authenticate with stored token."""
         self.token = token

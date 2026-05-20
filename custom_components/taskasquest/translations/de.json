@@ -2,36 +2,36 @@
   "config": {
     "step": {
       "user": {
-        "title": "Task as Quest — Login",
-        "description": "Verbinde dich mit deinem Task as Quest Account via PocketBase.",
+        "title": "Task as Quest - Login",
+        "description": "Verbinde Home Assistant mit deinem Task as Quest Account.",
         "data": {
-          "pocketbase_url": "PocketBase URL",
-          "email": "E-Mail",
+          "login_name": "Login-Name",
           "password": "Passwort",
-          "recovery_code": "Recovery-Code / Verschlüsselungs-Code"
+          "recovery_code": "Verschluesselungscode",
+          "totp_code": "2FA-Code (falls aktiv)"
         }
       }
     },
     "error": {
-      "auth_failed": "Authentifizierung fehlgeschlagen. Prüfe URL, E-Mail und Passwort.",
-      "recovery_code_required": "Dieser Account nutzt verschlüsselte Quests. Bitte gib den Recovery-Code ein.",
-      "recovery_code_invalid": "Der Recovery-Code ist ungültig oder passt nicht zu diesem Account."
+      "auth_failed": "Authentifizierung fehlgeschlagen. Pruefe Login-Name, Passwort und ggf. 2FA-Code.",
+      "recovery_code_required": "Dieser Account nutzt verschluesselte Quests. Bitte gib den Verschluesselungscode ein.",
+      "recovery_code_invalid": "Der Verschluesselungscode ist ungueltig oder passt nicht zu diesem Account."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Task as Quest — Regeln",
+        "title": "Task as Quest - Regeln",
         "menu_options": {
           "manage_rules": "Regeln verwalten / bearbeiten",
-          "add_rule": "Neue Regel hinzufügen"
+          "add_rule": "Neue Regel hinzufuegen"
         }
       },
       "add_rule": {
-        "title": "Automatisierung hinzufügen",
-        "description": "Wenn die Entität die Bedingung erfüllt, wird eine Quest erstellt.",
+        "title": "Automatisierung hinzufuegen",
+        "description": "Wenn die Entitaet die Bedingung erfuellt, wird eine Quest erstellt.",
         "data": {
-          "entity_id": "Entität",
+          "entity_id": "Entitaet",
           "condition": "Bedingung",
           "value": "Schwellenwert",
           "task_title": "Quest-Titel",
@@ -41,22 +41,22 @@
       },
       "manage_rules": {
         "title": "Regeln verwalten",
-        "description": "Wähle eine Regel aus der Liste aus, um sie zu bearbeiten oder zu löschen.",
+        "description": "Waehle eine Regel aus der Liste aus, um sie zu bearbeiten oder zu loeschen.",
         "data": {
           "rule_index": "Bestehende Regeln"
         }
       },
       "edit_rule": {
         "title": "Regel bearbeiten",
-        "description": "Passe die Parameter der Regel an oder lösche sie komplett.",
+        "description": "Passe die Parameter der Regel an oder loesche sie komplett.",
         "data": {
-          "entity_id": "Entität",
+          "entity_id": "Entitaet",
           "condition": "Bedingung",
           "value": "Schwellenwert",
           "task_title": "Quest-Titel",
           "difficulty": "Schwierigkeit",
           "cooldown": "Cooldown (Minuten)",
-          "delete_rule": "Diese Regel löschen"
+          "delete_rule": "Diese Regel loeschen"
         }
       }
     }

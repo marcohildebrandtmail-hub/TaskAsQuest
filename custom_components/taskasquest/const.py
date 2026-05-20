@@ -2,10 +2,14 @@
 
 DOMAIN = "taskasquest"
 
+DEFAULT_PB_URL = "http://192.168.10.177:8080"
+
 CONF_PB_URL = "pocketbase_url"
 CONF_EMAIL = "email"
+CONF_LOGIN_NAME = "login_name"
 CONF_PASSWORD = "password"
 CONF_RECOVERY_CODE = "recovery_code"
+CONF_TOTP_CODE = "totp_code"
 CONF_USER_ID = "user_id"
 CONF_AUTH_TOKEN = "auth_token"
 CONF_RULES = "rules"
