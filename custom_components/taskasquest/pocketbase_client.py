@@ -15,6 +15,7 @@ class PocketBaseClient:
         self.base_url = base_url.rstrip("/")
         self.token: str | None = None
         self.user_id: str | None = None
+        self.crypto_version: int = 0
         self._session: aiohttp.ClientSession | None = None
 
     async def _get_session(self) -> aiohttp.ClientSession:
@@ -69,6 +70,7 @@ class PocketBaseClient:
             self.token = data.get("token")
             record = data.get("record", {})
             self.user_id = record.get("id")
+            self.crypto_version = int(record.get("crypto_version") or 0)
             _LOGGER.info("PocketBase auth OK, user_id=%s", self.user_id)
             return True
         return False
@@ -82,6 +84,7 @@ class PocketBaseClient:
             self.token = data.get("token", token)
             record = data.get("record", {})
             self.user_id = record.get("id", user_id)
+            self.crypto_version = int(record.get("crypto_version") or 0)
             return True
         _LOGGER.warning("Token refresh failed, re-auth needed")
         return False
@@ -127,6 +130,12 @@ class PocketBaseClient:
     ) -> dict | None:
         """Create a new task. Returns the created record or None."""
         if not self.user_id:
+            return None
+        if self.crypto_version == 1:
+            _LOGGER.error(
+                "Task as Quest account uses encrypted quests. "
+                "Refusing to create plaintext task from Home Assistant."
+            )
             return None
         payload: dict = {
             "user": self.user_id,
