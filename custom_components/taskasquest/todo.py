@@ -80,7 +80,5 @@ class TaskAsQuestTodoList(CoordinatorEntity[TaskAsQuestCoordinator], TodoListEnt
     async def async_delete_todo_items(self, uids: list[str]) -> None:
         """Delete quests."""
         for uid in uids:
-            # In PocketBase loeschen oder auf 'deleted' setzen
-            # Der Einfachheit halber setzen wir hier auf 'canceled'
-            await self.coordinator.client.update_task_status(uid, "canceled")
+            await self.coordinator.client.delete_task(uid)
         await self.coordinator.async_refresh()

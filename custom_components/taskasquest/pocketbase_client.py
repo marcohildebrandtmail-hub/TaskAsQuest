@@ -1,7 +1,7 @@
 """PocketBase API client for QuestAsTask."""
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 
 import aiohttp
 
@@ -28,6 +28,11 @@ class PocketBaseClient:
             headers["Authorization"] = self.token
         return headers
 
+    @staticmethod
+    def _escape_filter_value(value: str) -> str:
+        """Escape a value for PocketBase filter string literals."""
+        return value.replace("\\", "\\\\").replace('"', '\\"')
+
     async def _request(
         self,
         method: str,
@@ -42,6 +47,8 @@ class PocketBaseClient:
             async with session.request(
                 method, url, json=json, params=params, headers=self._headers()
             ) as resp:
+                if resp.status == 204:
+                    return {}
                 if resp.status in {200, 201}:
                     return await resp.json()
                 _LOGGER.error("PocketBase request failed (%s): %s", resp.status, url)
@@ -52,10 +59,11 @@ class PocketBaseClient:
 
     async def authenticate(self, email: str, password: str) -> bool:
         """Login with email/password. Returns True on success."""
+        normalized_email = email.strip().lower()
         data = await self._request(
             "POST",
             "api/collections/taq_users/auth-with-password",
-            json={"identity": email, "password": password},
+            json={"identity": normalized_email, "password": password},
         )
         if data:
             self.token = data.get("token")
@@ -72,6 +80,8 @@ class PocketBaseClient:
         data = await self._request("POST", "api/collections/taq_users/auth-refresh")
         if data:
             self.token = data.get("token", token)
+            record = data.get("record", {})
+            self.user_id = record.get("id", user_id)
             return True
         _LOGGER.warning("Token refresh failed, re-auth needed")
         return False
@@ -80,11 +90,12 @@ class PocketBaseClient:
         """Get all open tasks for user."""
         if not self.user_id:
             return []
+        user_id = self._escape_filter_value(self.user_id)
         data = await self._request(
             "GET",
             "api/collections/taq_tasks/records",
             params={
-                "filter": f'user="{self.user_id}" && status="open"',
+                "filter": f'user="{user_id}" && status="open"',
                 "perPage": 500,
             },
         )
@@ -94,11 +105,13 @@ class PocketBaseClient:
         """Find open task with exact title."""
         if not self.user_id:
             return None
+        user_id = self._escape_filter_value(self.user_id)
+        escaped_title = self._escape_filter_value(title)
         data = await self._request(
             "GET",
             "api/collections/taq_tasks/records",
             params={
-                "filter": f'user="{self.user_id}" && status="open" && title="{title}"',
+                "filter": f'user="{user_id}" && status="open" && title="{escaped_title}"',
                 "perPage": 1,
             },
         )
@@ -118,25 +131,44 @@ class PocketBaseClient:
         payload: dict = {
             "user": self.user_id,
             "title": title,
+            "original_task": title,
+            "user_description": description,
             "difficulty": difficulty,
             "status": "open",
             "is_recurring": False,
+            "recurrence_rule": None,
         }
         if description:
             payload["description"] = description
         if due_date:
             payload["due_date"] = due_date
         else:
-            payload["due_date"] = datetime.now().strftime("%Y-%m-%d 12:00:00.000Z")
+            payload["due_date"] = None
         
         return await self._request("POST", "api/collections/taq_tasks/records", json=payload)
 
     async def update_task_status(self, task_id: str, status: str) -> bool:
         """Update the status of a task (e.g., 'completed')."""
+        payload: dict = {"status": status}
+        if status == "completed":
+            payload["completed_at"] = (
+                datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            )
+        elif status == "open":
+            payload["completed_at"] = None
+
         data = await self._request(
             "PATCH",
             f"api/collections/taq_tasks/records/{task_id}",
-            json={"status": status},
+            json=payload,
+        )
+        return data is not None
+
+    async def delete_task(self, task_id: str) -> bool:
+        """Delete a task."""
+        data = await self._request(
+            "DELETE",
+            f"api/collections/taq_tasks/records/{task_id}",
         )
         return data is not None
 

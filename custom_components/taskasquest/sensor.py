@@ -1,6 +1,5 @@
 """Sensor platform for Task as Quest."""
 
-from datetime import timedelta
 from typing import Any
 
 from homeassistant.components.sensor import SensorEntity

@@ -30,6 +30,7 @@ SERVICE_SCHEMA_CREATE_QUEST = vol.Schema(
         vol.Required("title"): cv.string,
         vol.Optional("difficulty", default="medium"): vol.In(["easy", "medium", "hard", "epic"]),
         vol.Optional("description"): cv.string,
+        vol.Optional("due_date"): cv.string,
     }
 )
 
@@ -78,6 +79,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             title=call.data["title"],
             difficulty=call.data["difficulty"],
             description=call.data.get("description"),
+            due_date=call.data.get("due_date"),
         )
         await coordinator.async_refresh()
 
