@@ -2,7 +2,7 @@
 
 <img src="custom_components/taskasquest/brand/icon.png" width="150" align="right" />
 
-Mach deinen Alltag zum Abenteuer! **Task as Quest** ist eine Home Assistant Integration, die nahtlos mit der *Task as Quest* Android App und PocketBase zusammenarbeitet. Sie verwandelt smarte Sensor-Ausfälle, Sensor-Werte und Routinen in Gamification-Quests für dich und deine Gefährten.
+Mach deinen Alltag zum Abenteuer! **Task as Quest** ist eine Home Assistant Integration, die nahtlos mit der *Task as Quest* Smartphone App zusammenarbeitet. Sie verwandelt smarte Sensor-Ausfälle, Sensor-Werte und Routinen in Gamification-Quests für dich und deine Gefährten.
 
 ## Features
 - 🎮 **Das Smart Home wird zum Abenteuer**: Verwandle Hausarbeiten und Sensor-Warnungen (wie "Blume gießen" oder "Batterie schwach") automatisch in spannende Quests in der *Task as Quest* App.
