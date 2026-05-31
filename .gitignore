@@ -9,6 +9,7 @@
 !info.md
 !.gitignore
 !.git/
+!*.png
 
 # Ignore python cache inside custom_components
 __pycache__/
