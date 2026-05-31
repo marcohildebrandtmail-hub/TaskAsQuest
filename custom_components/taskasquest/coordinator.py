@@ -126,7 +126,7 @@ class TaskAsQuestCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 description=f"Created by Home Assistant rule for {entity_id}.",
                 due_date=due_date,
                 assignees=rule.get(RULE_ASSIGNEES, []),
-                notify_app=rule.get(RULE_NOTIFY_APP, False),
+                notify_app=rule.get(RULE_NOTIFY_APP, True),
             )
             if task:
                 created += 1

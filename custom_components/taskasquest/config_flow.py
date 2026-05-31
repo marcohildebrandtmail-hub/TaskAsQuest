@@ -262,7 +262,7 @@ class TaskAsQuestOptionsFlow(config_entries.OptionsFlow):
             vol.Required(RULE_COOLDOWN, default=rule.get(RULE_COOLDOWN, DEFAULT_COOLDOWN)): int,
             vol.Optional(RULE_ASSIGNEES, default=rule.get(RULE_ASSIGNEES, [])): assignee_selector,
             vol.Required(RULE_DUE_DATE_OFFSET, default=str(rule.get(RULE_DUE_DATE_OFFSET, "-1"))): due_date_selector,
-            vol.Optional(RULE_NOTIFY_APP, default=rule.get(RULE_NOTIFY_APP, False)): bool,
+            vol.Optional(RULE_NOTIFY_APP, default=rule.get(RULE_NOTIFY_APP, True)): bool,
         })
         
         if rule:
