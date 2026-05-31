@@ -2,7 +2,7 @@
 
 DOMAIN = "taskasquest"
 
-DEFAULT_PB_URL = "http://192.168.10.177:8080"
+DEFAULT_PB_URL = "https://app.taskasquest.de"
 
 CONF_PB_URL = "pocketbase_url"
 CONF_EMAIL = "email"
