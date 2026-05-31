@@ -32,6 +32,7 @@ SERVICE_SCHEMA_CREATE_QUEST = vol.Schema(
         vol.Optional("difficulty", default="medium"): vol.In(["easy", "medium", "hard", "epic"]),
         vol.Optional("description"): cv.string,
         vol.Optional("due_date"): cv.string,
+        vol.Optional("is_allianz", default=False): cv.boolean,
     }
 )
 
@@ -87,6 +88,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             difficulty=call.data["difficulty"],
             description=call.data.get("description"),
             due_date=call.data.get("due_date"),
+            is_allianz=call.data.get("is_allianz", False),
         )
         await coordinator.async_refresh()
 
@@ -95,6 +97,56 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         SERVICE_CREATE_QUEST,
         handle_create_quest,
         schema=SERVICE_SCHEMA_CREATE_QUEST,
+    )
+
+    SERVICE_ADD_RULES = "add_rules"
+    SERVICE_SCHEMA_ADD_RULES = vol.Schema(
+        {
+            vol.Required("rules"): vol.All(
+                cv.ensure_list,
+                [
+                    vol.Schema({
+                        vol.Required("entity_id"): cv.string,
+                        vol.Required("condition"): vol.In(["equals", "not_equals", "below", "above"]),
+                        vol.Required("value"): cv.string,
+                        vol.Required("task_title"): cv.string,
+                        vol.Optional("difficulty", default="medium"): vol.In(["easy", "medium", "hard", "epic"]),
+                        vol.Optional("cooldown", default=1440): int,
+                        vol.Optional("assignees", default=[]): vol.All(cv.ensure_list, [cv.string]),
+                        vol.Optional("due_date_offset", default="-1"): cv.string,
+                        vol.Optional("notify_app", default=False): cv.boolean,
+                        vol.Optional("enabled", default=True): cv.boolean,
+                    })
+                ]
+            )
+        }
+    )
+
+    async def handle_add_rules(call: ServiceCall) -> None:
+        """Add new rules to the integration."""
+        new_rules = call.data["rules"]
+        current_options = dict(entry.options)
+        rules = list(current_options.get(CONF_RULES, []))
+        
+        # Avoid exact duplicates by entity_id
+        existing_entities = {r.get('entity_id') for r in rules}
+        
+        added_count = 0
+        for rule in new_rules:
+            if rule["entity_id"] not in existing_entities:
+                rules.append(rule)
+                added_count += 1
+                
+        if added_count > 0:
+            current_options[CONF_RULES] = rules
+            hass.config_entries.async_update_entry(entry, options=current_options)
+            _LOGGER.info("Task as Quest: Added %d new rules via service call.", added_count)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_ADD_RULES,
+        handle_add_rules,
+        schema=SERVICE_SCHEMA_ADD_RULES,
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

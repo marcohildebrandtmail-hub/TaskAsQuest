@@ -6,9 +6,21 @@
         "description": "Verbinde Home Assistant mit deinem Task as Quest Account. Format: Name#0001 (vierstellige Nummer).",
         "data": {
           "login_name": "Login-Name (Name#0001)",
-          "password": "Passwort",
-          "recovery_code": "Verschluesselungscode",
-          "totp_code": "2FA-Code (falls aktiv)"
+          "password": "Passwort"
+        }
+      },
+      "totp": {
+        "title": "2-Faktor-Authentifizierung (2FA)",
+        "description": "Falls du 2FA in der App aktiviert hast, gib den aktuellen Code hier ein. Wenn nicht, lass das Feld einfach leer und klicke auf Absenden.",
+        "data": {
+          "totp_code": "2FA-Code (optional)"
+        }
+      },
+      "recovery": {
+        "title": "Verschluesselte Quests",
+        "description": "Dein Account nutzt End-to-End Verschluesselung. Bitte gib deinen Verschluesselungscode ein.",
+        "data": {
+          "recovery_code": "Verschluesselungscode"
         }
       }
     },
@@ -28,15 +40,24 @@
         }
       },
       "add_rule": {
-        "title": "Automatisierung hinzufuegen",
+        "title": "Automatisierung hinzufuegen (Schritt 1)",
+        "description": "Waehle zuerst die Entitaet aus, die ueberwacht werden soll.",
+        "data": {
+          "entity_id": "Entitaet"
+        }
+      },
+      "add_rule_details": {
+        "title": "Automatisierung hinzufuegen (Schritt 2)",
         "description": "Wenn die Entitaet die Bedingung erfuellt, wird eine Quest erstellt.",
         "data": {
-          "entity_id": "Entitaet",
           "condition": "Bedingung",
           "value": "Schwellenwert",
           "task_title": "Quest-Titel",
           "difficulty": "Schwierigkeit",
-          "cooldown": "Cooldown (Minuten)"
+          "cooldown": "Cooldown (Minuten)",
+          "assignees": "Gefaehrten zuweisen (optional)",
+          "due_date_offset": "Faelligkeit",
+          "notify_app": "App-Benachrichtigung senden"
         }
       },
       "manage_rules": {
@@ -50,12 +71,14 @@
         "title": "Regel bearbeiten",
         "description": "Passe die Parameter der Regel an oder loesche sie komplett.",
         "data": {
-          "entity_id": "Entitaet",
           "condition": "Bedingung",
           "value": "Schwellenwert",
           "task_title": "Quest-Titel",
           "difficulty": "Schwierigkeit",
           "cooldown": "Cooldown (Minuten)",
+          "assignees": "Gefaehrten zuweisen (optional)",
+          "due_date_offset": "Faelligkeit",
+          "notify_app": "App-Benachrichtigung senden",
           "delete_rule": "Diese Regel loeschen"
         }
       }

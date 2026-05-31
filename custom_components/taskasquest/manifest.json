@@ -3,7 +3,7 @@
   "name": "Task as Quest",
   "codeowners": ["@marcohildebrandtmail-hub"],
   "config_flow": true,
-  "documentation": "https://github.com/marcohildebrandtmail-hub/questastask",
+  "documentation": "https://github.com/marcohildebrandtmail-hub/TaskAsQuest",
   "integration_type": "service",
   "iot_class": "local_polling",
   "options_flow": true,

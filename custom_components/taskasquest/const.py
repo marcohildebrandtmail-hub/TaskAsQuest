@@ -21,6 +21,9 @@ RULE_VALUE = "value"
 RULE_TASK_TITLE = "task_title"
 RULE_DIFFICULTY = "difficulty"  # "easy", "medium", "hard", "epic"
 RULE_COOLDOWN = "cooldown"  # Minuten bis der gleiche Task erneut erstellt wird
+RULE_ASSIGNEES = "assignees"
+RULE_DUE_DATE_OFFSET = "due_date_offset"
+RULE_NOTIFY_APP = "notify_app"
 RULE_ENABLED = "enabled"
 
 CONDITIONS = ["below", "above", "equals", "not_equals"]

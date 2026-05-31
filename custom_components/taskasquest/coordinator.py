@@ -18,9 +18,13 @@ from .const import (
     RULE_DIFFICULTY,
     RULE_ENABLED,
     RULE_ENTITY_ID,
+    RULE_ASSIGNEES,
+    RULE_DUE_DATE_OFFSET,
+    RULE_NOTIFY_APP,
     RULE_TASK_TITLE,
     RULE_VALUE,
 )
+from homeassistant.util import dt as dt_util
 from .pocketbase_client import PocketBaseClient
 
 _LOGGER = logging.getLogger(__name__)
@@ -86,7 +90,7 @@ class TaskAsQuestCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 continue
 
             state = self.hass.states.get(entity_id)
-            if state is None or state.state in {"unknown", "unavailable"}:
+            if state is None:
                 continue
 
             if not self._rule_matches(rule, state.state):
@@ -103,10 +107,26 @@ class TaskAsQuestCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._last_created_by_rule[rule_key] = now
                 continue
 
+            due_date = None
+            offset = int(rule.get(RULE_DUE_DATE_OFFSET, -1))
+            if offset >= 0 or offset == 100:
+                current_time = dt_util.now()
+                if offset == 100:
+                    add_days = 0 if current_time.hour < 18 else 1
+                else:
+                    add_days = offset
+                
+                target_date = current_time + timedelta(days=add_days)
+                target_utc = target_date.replace(hour=23, minute=59, second=59, microsecond=0).astimezone(dt_util.UTC)
+                due_date = target_utc.isoformat().replace("+00:00", "Z")
+
             task = await self.client.create_task(
                 task_title,
                 difficulty=rule.get(RULE_DIFFICULTY, "medium"),
                 description=f"Created by Home Assistant rule for {entity_id}.",
+                due_date=due_date,
+                assignees=rule.get(RULE_ASSIGNEES, []),
+                notify_app=rule.get(RULE_NOTIFY_APP, False),
             )
             if task:
                 created += 1

@@ -192,12 +192,53 @@ class PocketBaseClient:
         items = data.get("items", []) if data else []
         return items[0] if items else None
 
+    async def get_companions(self) -> dict[str, str]:
+        """Get all companions of the user (ID -> Name)."""
+        if not self.user_id:
+            return {}
+        user_id = self._escape_filter_value(self.user_id)
+        companions = set()
+        
+        data1 = await self._request("GET", "api/collections/taq_party_members/records", params={
+            "filter": f'user="{user_id}"',
+            "expand": "party"
+        })
+        for item in (data1.get("items", []) if data1 else []):
+            owner = item.get("expand", {}).get("party", {}).get("owner")
+            if owner and owner != self.user_id:
+                companions.add(owner)
+                
+        data2 = await self._request("GET", "api/collections/taq_party_members/records", params={
+            "filter": f'party.owner="{user_id}"'
+        })
+        for item in (data2.get("items", []) if data2 else []):
+            if item.get("user") and item["user"] != self.user_id:
+                companions.add(item["user"])
+                
+        if not companions:
+            return {}
+
+        filter_str = " || ".join([f'id="{cid}"' for cid in companions])
+        user_data = await self._request("GET", "api/collections/taq_users/records", params={"filter": filter_str})
+        
+        result = {}
+        for item in (user_data.get("items", []) if user_data else []):
+            name = item.get("display_base", item.get("username", "Unknown"))
+            number = item.get("display_number")
+            if number:
+                name = f"{name}#{str(number).zfill(4)}"
+            result[item["id"]] = name
+            
+        return result
+
     async def create_task(
         self,
         title: str,
         difficulty: str = "medium",
         description: str | None = None,
         due_date: str | None = None,
+        assignees: list[str] | None = None,
+        notify_app: bool = False,
     ) -> dict | None:
         """Create a new task. Returns the created record or None."""
         if not self.user_id:
@@ -206,16 +247,17 @@ class PocketBaseClient:
             if not self.task_crypto:
                 _LOGGER.error("Task as Quest crypto is locked; cannot create encrypted task")
                 return None
+            payload_enc, quest_key = self.task_crypto.encrypt_task_write(
+                {
+                    "title": title,
+                    "description": description,
+                    "original_task": title,
+                    "user_description": description,
+                }
+            )
             payload: dict = {
                 "user": self.user_id,
-                **self.task_crypto.encrypt_task_write(
-                    {
-                        "title": title,
-                        "description": description,
-                        "original_task": title,
-                        "user_description": description,
-                    }
-                ),
+                **payload_enc,
                 "difficulty": difficulty,
                 "status": "open",
                 "is_recurring": False,
@@ -223,26 +265,72 @@ class PocketBaseClient:
                 "due_date": due_date,
                 "has_time": bool(due_date and "T" in due_date),
             }
-            return await self._request("POST", "api/collections/taq_tasks/records", json=payload)
-        payload: dict = {
-            "user": self.user_id,
-            "title": title,
-            "original_task": title,
-            "user_description": description,
-            "difficulty": difficulty,
-            "status": "open",
-            "is_recurring": False,
-            "recurrence_rule": None,
-            "has_time": bool(due_date and "T" in due_date),
-        }
-        if description:
-            payload["description"] = description
-        if due_date:
-            payload["due_date"] = due_date
+            task_data = await self._request("POST", "api/collections/taq_tasks/records", json=payload)
         else:
-            payload["due_date"] = None
+            payload: dict = {
+                "user": self.user_id,
+                "title": title,
+                "original_task": title,
+                "user_description": description,
+                "difficulty": difficulty,
+                "status": "open",
+                "is_recurring": False,
+                "recurrence_rule": None,
+                "has_time": bool(due_date and "T" in due_date),
+            }
+            if description:
+                payload["description"] = description
+            if due_date:
+                payload["due_date"] = due_date
+            else:
+                payload["due_date"] = None
+            
+            task_data = await self._request("POST", "api/collections/taq_tasks/records", json=payload)
+
+        if task_data:
+            task_id = task_data.get("id")
+            if task_id:
+                assigned_users = set()
+                
+                if notify_app:
+                    await self._request("POST", "api/collections/taq_task_assignees/records", json={
+                        "task": task_id,
+                        "user": self.user_id,
+                        "role": "ha"
+                    })
+                    assigned_users.add(self.user_id)
+                
+                if assignees:
+                    # Fetch public keys for all assignees if crypto is enabled
+                    assignee_keys = {}
+                    if self.crypto_version == 1 and self.task_crypto:
+                        filter_str = " || ".join([f'id="{cid}"' for cid in assignees])
+                        users_data = await self._request("GET", "api/collections/taq_users/records", params={"filter": filter_str})
+                        if users_data and "items" in users_data:
+                            for u in users_data["items"]:
+                                if u.get("pub_key"):
+                                    assignee_keys[u["id"]] = u["pub_key"]
+
+                    for comp_id in assignees:
+                        if comp_id not in assigned_users:
+                            assignee_payload = {
+                                "task": task_id,
+                                "user": comp_id
+                            }
+                            # Wrap the quest key for this assignee
+                            if self.crypto_version == 1 and self.task_crypto and comp_id in assignee_keys:
+                                try:
+                                    wrapped = self.task_crypto.wrap_quest_key_for_b64_pub(
+                                        quest_key, assignee_keys[comp_id]
+                                    )
+                                    assignee_payload["quest_key_wrapped"] = wrapped
+                                except Exception as err:
+                                    _LOGGER.error("Failed to wrap quest key for assignee %s: %s", comp_id, err)
+                            
+                            await self._request("POST", "api/collections/taq_task_assignees/records", json=assignee_payload)
+                            assigned_users.add(comp_id)
         
-        return await self._request("POST", "api/collections/taq_tasks/records", json=payload)
+        return task_data
 
     async def update_task_status(self, task_id: str, status: str) -> bool:
         """Update the status of a task (e.g., 'completed')."""

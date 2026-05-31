@@ -109,7 +109,7 @@ class TaskCrypto:
 
         return cls(master_key=master_key, private_key=private_key, public_key=public_key)
 
-    def encrypt_task_write(self, plain: dict[str, str | None]) -> dict[str, Any]:
+    def encrypt_task_write(self, plain: dict[str, str | None]) -> tuple[dict[str, Any], bytes]:
         """Encrypt app-sensitive task fields and wrap the quest key for the owner."""
         quest_key = os.urandom(32)
         payload: dict[str, Any] = {"crypto_version": 1}
@@ -121,7 +121,7 @@ class TaskCrypto:
             )
 
         payload["quest_key_wrapped"] = self.wrap_quest_key(quest_key, self.public_key)
-        return payload
+        return payload, quest_key
 
     def decrypt_task_read(self, record: dict[str, Any]) -> dict[str, Any]:
         """Decrypt encrypted task fields for display in Home Assistant."""
@@ -177,6 +177,17 @@ class TaskCrypto:
         cipher = AESGCM(wrap_key).encrypt(iv, quest_key, None)
         length = len(ephemeral_public_der).to_bytes(2, "big")
         return _b64encode(length + ephemeral_public_der + iv + cipher)
+
+    def wrap_quest_key_for_b64_pub(self, quest_key: bytes, pub_key_b64: str) -> str:
+        """Wrap a raw quest key using a Base64-encoded DER public key."""
+        try:
+            pub_der = _b64decode(pub_key_b64)
+            recipient_public_key = serialization.load_der_public_key(pub_der)
+            if not isinstance(recipient_public_key, ec.EllipticCurvePublicKey):
+                raise TaskCryptoError("Unsupported recipient key type")
+            return self.wrap_quest_key(quest_key, recipient_public_key)
+        except Exception as err:
+            raise TaskCryptoError("Could not wrap quest key for recipient") from err
 
     def unwrap_quest_key(self, wrapped_b64: str) -> bytes:
         """Unwrap a task quest key with this user's private key."""

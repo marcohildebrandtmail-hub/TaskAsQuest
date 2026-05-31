@@ -6,9 +6,21 @@
         "description": "Connect Home Assistant to your Task as Quest account. Format: Name#0001 (four-digit number).",
         "data": {
           "login_name": "Login name (Name#0001)",
-          "password": "Password",
-          "recovery_code": "Encryption code",
-          "totp_code": "2FA code (if enabled)"
+          "password": "Password"
+        }
+      },
+      "totp": {
+        "title": "Two-Factor Authentication (2FA)",
+        "description": "If you have 2FA enabled in the app, enter the current code here. Otherwise, leave the field empty and click submit.",
+        "data": {
+          "totp_code": "2FA code (optional)"
+        }
+      },
+      "recovery": {
+        "title": "Encrypted Quests",
+        "description": "Your account uses End-to-End Encryption. Please enter your encryption code.",
+        "data": {
+          "recovery_code": "Encryption code"
         }
       }
     },
@@ -28,15 +40,24 @@
         }
       },
       "add_rule": {
-        "title": "Add automation rule",
+        "title": "Add automation rule (Step 1)",
+        "description": "First, select the entity you want to monitor.",
+        "data": {
+          "entity_id": "Entity"
+        }
+      },
+      "add_rule_details": {
+        "title": "Add automation rule (Step 2)",
         "description": "When the entity matches the condition, a quest is created.",
         "data": {
-          "entity_id": "Entity",
           "condition": "Condition",
           "value": "Threshold value",
           "task_title": "Quest title",
           "difficulty": "Difficulty",
-          "cooldown": "Cooldown (minutes)"
+          "cooldown": "Cooldown (minutes)",
+          "assignees": "Assign companions (optional)",
+          "due_date_offset": "Due date",
+          "notify_app": "Send app notification"
         }
       },
       "manage_rules": {
@@ -50,12 +71,14 @@
         "title": "Edit rule",
         "description": "Change the rule parameters or delete it.",
         "data": {
-          "entity_id": "Entity",
           "condition": "Condition",
           "value": "Threshold value",
           "task_title": "Quest title",
           "difficulty": "Difficulty",
           "cooldown": "Cooldown (minutes)",
+          "assignees": "Assign companions (optional)",
+          "due_date_offset": "Due date",
+          "notify_app": "Send app notification",
           "delete_rule": "Delete this rule"
         }
       }

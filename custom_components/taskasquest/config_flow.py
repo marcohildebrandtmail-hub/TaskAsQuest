@@ -26,6 +26,9 @@ from .const import (
     RULE_DIFFICULTY,
     RULE_ENABLED,
     RULE_ENTITY_ID,
+    RULE_ASSIGNEES,
+    RULE_DUE_DATE_OFFSET,
+    RULE_NOTIFY_APP,
     RULE_TASK_TITLE,
     RULE_VALUE,
 )
@@ -37,52 +40,19 @@ class TaskAsQuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    def __init__(self) -> None:
+        """Initialize the config flow."""
+        self._login_data: dict[str, Any] = {}
+        self._client: PocketBaseClient | None = None
+
     async def async_step_user(
         self,
         user_input: dict[str, Any] | None = None,
     ) -> config_entries.ConfigFlowResult:
         """Create the integration entry."""
-        errors: dict[str, str] = {}
-
         if user_input is not None:
-            client = PocketBaseClient(DEFAULT_PB_URL)
-            authenticated = await client.authenticate_login_name(
-                user_input[CONF_LOGIN_NAME],
-                user_input[CONF_PASSWORD],
-                user_input.get(CONF_TOTP_CODE),
-            )
-
-            if authenticated:
-                can_create = False
-                if client.crypto_version == 1:
-                    recovery_code = user_input.get(CONF_RECOVERY_CODE, "")
-                    if not recovery_code:
-                        errors["base"] = "recovery_code_required"
-                    elif not client.unlock_task_crypto(recovery_code):
-                        errors["base"] = "recovery_code_invalid"
-                    else:
-                        can_create = True
-                else:
-                    can_create = True
-
-                await client.close()
-                if can_create:
-                    await self.async_set_unique_id(client.user_id)
-                    self._abort_if_unique_id_configured()
-                    entry_data = dict(user_input)
-                    entry_data.pop(CONF_TOTP_CODE, None)
-                    return self.async_create_entry(
-                        title="Task as Quest",
-                        data={
-                            **entry_data,
-                            "user_id": client.user_id,
-                            "auth_token": client.token,
-                        },
-                        options={CONF_RULES: []},
-                    )
-            else:
-                errors["base"] = "auth_failed"
-                await client.close()
+            self._login_data = user_input
+            return await self.async_step_totp()
 
         return self.async_show_form(
             step_id="user",
@@ -92,13 +62,97 @@ class TaskAsQuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     vol.Required(CONF_PASSWORD): selector.TextSelector(
                         selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
                     ),
-                    vol.Optional(CONF_RECOVERY_CODE): selector.TextSelector(
-                        selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
-                    ),
+                }
+            ),
+        )
+
+    async def async_step_totp(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> config_entries.ConfigFlowResult:
+        """Handle the TOTP step and authentication."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            totp_code = user_input.get(CONF_TOTP_CODE, "")
+            self._login_data[CONF_TOTP_CODE] = totp_code
+            
+            client = PocketBaseClient(DEFAULT_PB_URL)
+            authenticated = await client.authenticate_login_name(
+                self._login_data[CONF_LOGIN_NAME],
+                self._login_data[CONF_PASSWORD],
+                totp_code if totp_code else None,
+            )
+
+            if authenticated:
+                self._client = client
+                if client.crypto_version == 1:
+                    return await self.async_step_recovery()
+                else:
+                    return await self._async_create_final_entry()
+            else:
+                errors["base"] = "auth_failed"
+                await client.close()
+
+        return self.async_show_form(
+            step_id="totp",
+            data_schema=vol.Schema(
+                {
                     vol.Optional(CONF_TOTP_CODE): str,
                 }
             ),
             errors=errors,
+        )
+
+    async def async_step_recovery(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> config_entries.ConfigFlowResult:
+        """Handle recovery code if crypto is enabled."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            recovery_code = user_input.get(CONF_RECOVERY_CODE, "")
+            if not recovery_code:
+                errors["base"] = "recovery_code_required"
+            elif not self._client.unlock_task_crypto(recovery_code):
+                errors["base"] = "recovery_code_invalid"
+            else:
+                self._login_data[CONF_RECOVERY_CODE] = recovery_code
+                return await self._async_create_final_entry()
+
+        return self.async_show_form(
+            step_id="recovery",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_RECOVERY_CODE): selector.TextSelector(
+                        selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+                    ),
+                }
+            ),
+            errors=errors,
+        )
+
+    async def _async_create_final_entry(self) -> config_entries.ConfigFlowResult:
+        """Finalize the creation of the config entry."""
+        await self.async_set_unique_id(self._client.user_id)
+        self._abort_if_unique_id_configured()
+        
+        entry_data = dict(self._login_data)
+        entry_data.pop(CONF_TOTP_CODE, None)
+        
+        user_id = self._client.user_id
+        auth_token = self._client.token
+        await self._client.close()
+        
+        return self.async_create_entry(
+            title="Task as Quest",
+            data={
+                **entry_data,
+                "user_id": user_id,
+                "auth_token": auth_token,
+            },
+            options={CONF_RULES: []},
         )
 
     @staticmethod
@@ -117,6 +171,7 @@ class TaskAsQuestOptionsFlow(config_entries.OptionsFlow):
         self._config_entry = config_entry
         self._rules = list(config_entry.options.get(CONF_RULES, []))
         self._selected_rule_index: int | None = None
+        self._current_entity_id: str | None = None
 
     async def async_step_init(
         self,
@@ -132,9 +187,97 @@ class TaskAsQuestOptionsFlow(config_entries.OptionsFlow):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> config_entries.ConfigFlowResult:
-        """Add one automation rule."""
+        """Add one automation rule: Step 1 Entity Selection."""
+        if user_input is not None:
+            self._current_entity_id = user_input[RULE_ENTITY_ID]
+            return await self.async_step_add_rule_details()
+
+        return self.async_show_form(
+            step_id="add_rule",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(RULE_ENTITY_ID): selector.EntitySelector(),
+                }
+            ),
+        )
+
+    async def _get_form_schema(self, entity_id: str, rule: dict[str, Any] | None = None) -> vol.Schema:
+        """Get the schema for rule details."""
+        if rule is None:
+            rule = {}
+            
+        coordinator = self.hass.data[DOMAIN][self._config_entry.entry_id]
+        companions = await coordinator.client.get_companions()
+        
+        assignee_options = [
+            selector.SelectOptionDict(value=cid, label=name)
+            for cid, name in companions.items()
+        ]
+        
+        assignee_selector = selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=assignee_options,
+                multiple=True,
+                mode=selector.SelectSelectorMode.DROPDOWN,
+            )
+        )
+        
+        due_date_options = [
+            selector.SelectOptionDict(value="-1", label="Kein Datum"),
+            selector.SelectOptionDict(value="0", label="Heute (23:59)"),
+            selector.SelectOptionDict(value="1", label="Heute +1 Tag"),
+            selector.SelectOptionDict(value="2", label="Heute +2 Tage"),
+            selector.SelectOptionDict(value="3", label="Heute +3 Tage"),
+            selector.SelectOptionDict(value="7", label="Heute +7 Tage"),
+            selector.SelectOptionDict(value="100", label="Auto-Modus"),
+        ]
+        
+        due_date_selector = selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=due_date_options,
+                mode=selector.SelectSelectorMode.DROPDOWN,
+            )
+        )
+        
+        schema = {
+            vol.Required(RULE_CONDITION, default=rule.get(RULE_CONDITION, "equals")): vol.In(CONDITIONS),
+        }
+        
+        if rule and RULE_VALUE in rule:
+            schema[vol.Required(RULE_VALUE, default=rule[RULE_VALUE])] = selector.StateSelector(
+                selector.StateSelectorConfig(entity_id=entity_id)
+            )
+        else:
+            schema[vol.Required(RULE_VALUE)] = selector.StateSelector(
+                selector.StateSelectorConfig(entity_id=entity_id)
+            )
+            
+        if rule and RULE_TASK_TITLE in rule:
+            schema[vol.Required(RULE_TASK_TITLE, default=rule[RULE_TASK_TITLE])] = str
+        else:
+            schema[vol.Required(RULE_TASK_TITLE)] = str
+            
+        schema.update({
+            vol.Required(RULE_DIFFICULTY, default=rule.get(RULE_DIFFICULTY, "medium")): vol.In(DIFFICULTIES),
+            vol.Required(RULE_COOLDOWN, default=rule.get(RULE_COOLDOWN, DEFAULT_COOLDOWN)): int,
+            vol.Optional(RULE_ASSIGNEES, default=rule.get(RULE_ASSIGNEES, [])): assignee_selector,
+            vol.Required(RULE_DUE_DATE_OFFSET, default=str(rule.get(RULE_DUE_DATE_OFFSET, "-1"))): due_date_selector,
+            vol.Optional(RULE_NOTIFY_APP, default=rule.get(RULE_NOTIFY_APP, False)): bool,
+        })
+        
+        if rule:
+            schema[vol.Optional("delete_rule", default=False)] = bool
+            
+        return vol.Schema(schema)
+
+    async def async_step_add_rule_details(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> config_entries.ConfigFlowResult:
+        """Add one automation rule: Step 2 Details."""
         if user_input is not None:
             rule = dict(user_input)
+            rule[RULE_ENTITY_ID] = self._current_entity_id
             rule[RULE_ENABLED] = True
             self._rules.append(rule)
             return self.async_create_entry(
@@ -142,18 +285,10 @@ class TaskAsQuestOptionsFlow(config_entries.OptionsFlow):
                 data={CONF_RULES: self._rules},
             )
 
+        schema = await self._get_form_schema(self._current_entity_id)
         return self.async_show_form(
-            step_id="add_rule",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(RULE_ENTITY_ID): selector.EntitySelector(),
-                    vol.Required(RULE_CONDITION, default="below"): vol.In(CONDITIONS),
-                    vol.Required(RULE_VALUE): str,
-                    vol.Required(RULE_TASK_TITLE): str,
-                    vol.Required(RULE_DIFFICULTY, default="medium"): vol.In(DIFFICULTIES),
-                    vol.Required(RULE_COOLDOWN, default=DEFAULT_COOLDOWN): int,
-                }
-            ),
+            step_id="add_rule_details",
+            data_schema=schema,
         )
 
     async def async_step_manage_rules(
@@ -193,6 +328,7 @@ class TaskAsQuestOptionsFlow(config_entries.OptionsFlow):
             return await self.async_step_manage_rules()
 
         rule = self._rules[self._selected_rule_index]
+        entity_id = rule.get(RULE_ENTITY_ID)
 
         if user_input is not None:
             if user_input.get("delete_rule"):
@@ -200,6 +336,7 @@ class TaskAsQuestOptionsFlow(config_entries.OptionsFlow):
             else:
                 updated_rule = dict(user_input)
                 updated_rule.pop("delete_rule", None)
+                updated_rule[RULE_ENTITY_ID] = entity_id
                 updated_rule[RULE_ENABLED] = True
                 self._rules[self._selected_rule_index] = updated_rule
             
@@ -208,17 +345,8 @@ class TaskAsQuestOptionsFlow(config_entries.OptionsFlow):
                 data={CONF_RULES: self._rules},
             )
 
+        schema = await self._get_form_schema(entity_id, rule)
         return self.async_show_form(
             step_id="edit_rule",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(RULE_ENTITY_ID, default=rule.get(RULE_ENTITY_ID)): selector.EntitySelector(),
-                    vol.Required(RULE_CONDITION, default=rule.get(RULE_CONDITION, "below")): vol.In(CONDITIONS),
-                    vol.Required(RULE_VALUE, default=rule.get(RULE_VALUE)): str,
-                    vol.Required(RULE_TASK_TITLE, default=rule.get(RULE_TASK_TITLE)): str,
-                    vol.Required(RULE_DIFFICULTY, default=rule.get(RULE_DIFFICULTY, "medium")): vol.In(DIFFICULTIES),
-                    vol.Required(RULE_COOLDOWN, default=rule.get(RULE_COOLDOWN, DEFAULT_COOLDOWN)): int,
-                    vol.Optional("delete_rule", default=False): bool,
-                }
-            ),
+            data_schema=schema,
         )
