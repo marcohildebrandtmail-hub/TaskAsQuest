@@ -1,0 +1,48 @@
+create_quest:
+  name: Create Quest
+  description: Creates a new quest in Task as Quest.
+  fields:
+    title:
+      name: Title
+      description: The title of the quest.
+      required: true
+      example: "Water the plants"
+      selector:
+        text:
+    difficulty:
+      name: Difficulty
+      description: The difficulty of the quest.
+      required: false
+      default: "medium"
+      selector:
+        select:
+          options:
+            - label: "Easy"
+              value: "easy"
+            - label: "Medium"
+              value: "medium"
+            - label: "Hard"
+              value: "hard"
+            - label: "Epic"
+              value: "epic"
+    description:
+      name: Description
+      description: A longer description of the quest.
+      required: false
+      example: "Water the plants in the living room."
+      selector:
+        text:
+    due_date:
+      name: Due Date
+      description: When is this quest due?
+      required: false
+      example: "2026-06-01"
+      selector:
+        text:
+    is_allianz:
+      name: Allianz Quest
+      description: Assign this to your Allianz (assignees).
+      required: false
+      default: false
+      selector:
+        boolean:
