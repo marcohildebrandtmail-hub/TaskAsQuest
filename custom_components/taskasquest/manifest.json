@@ -5,8 +5,7 @@
   "config_flow": true,
   "documentation": "https://github.com/marcohildebrandtmail-hub/TaskAsQuest",
   "integration_type": "service",
-  "iot_class": "local_polling",
   "options_flow": true,
   "requirements": ["aiohttp", "cryptography"],
-  "version": "2.0.0"
+  "version": "2.0.3"
 }
