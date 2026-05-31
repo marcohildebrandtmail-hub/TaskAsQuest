@@ -27,7 +27,6 @@ Die einfachste Methode ist die Installation über den [Home Assistant Community 
 1. Gehe in Home Assistant zu **Einstellungen -> Geräte & Dienste**.
 2. Klicke auf **Integration hinzufügen** und suche nach `Task as Quest`.
 3. Gib deine Zugangsdaten ein:
-   - **PocketBase URL** (z.B. `https://app.taskasquest.de`)
    - **Login Name / E-Mail**
    - **Passwort**
    - **Verschlüsselungs-Code (Recovery Code)** (Wird für die E2E-Verschlüsselung benötigt!)
