@@ -4,9 +4,9 @@
   "codeowners": ["@marcohildebrandtmail-hub"],
   "config_flow": true,
   "documentation": "https://github.com/marcohildebrandtmail-hub/TaskAsQuest",
-  "issue_tracker": "https://github.com/marcohildebrandtmail-hub/TaskAsQuest/issues",
   "integration_type": "hub",
   "iot_class": "local_push",
+  "issue_tracker": "https://github.com/marcohildebrandtmail-hub/TaskAsQuest/issues",
   "requirements": [],
-  "version": "2.0.7"
+  "version": "2.0.8"
 }
