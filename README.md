@@ -9,7 +9,6 @@ Mach deinen Alltag zum Abenteuer! **Task as Quest** ist eine Home Assistant Inte
 - 🛡️ **Allianz-Quests**: Verteile Aufträge direkt an deine Gefährten (Familienmitglieder/Mitbewohner). Home Assistant schickt die Quests gezielt an die richtigen Helden in deiner Gruppe.
 - 📱 **Push-Benachrichtigungen**: Lass dich und deine Gefährten auf dem Smartphone benachrichtigen, sobald das Smart Home einen neuen, epischen Auftrag für euch hat.
 - ⚙️ **Einfache Regeln**: Lege direkt in Home Assistant fest, bei welchen Sensor-Werten (z.B. Bodenfeuchtigkeit < 45%) ein neuer Quest am schwarzen Brett der App landen soll.
-- 🔒 **Maximale Sicherheit**: Deine Smart Home Daten bleiben privat. Die Integration kommuniziert absolut sicher und Ende-zu-Ende verschlüsselt mit der App – niemand außer deinen Gefährten kann eure Quests mitlesen.
 
 ## Installation via HACS
 
