@@ -5,11 +5,11 @@
 Mach deinen Alltag zum Abenteuer! **Task as Quest** ist eine Home Assistant Integration, die nahtlos mit der *Task as Quest* Android App und PocketBase zusammenarbeitet. Sie verwandelt smarte Sensor-Ausfälle, Sensor-Werte und Routinen in Gamification-Quests für dich und deine Gefährten.
 
 ## Features
-- 🎮 **Automatische Quests:** Erstelle Quests basierend auf Home Assistant Sensor-Werten (z.B. "Briefkastensensor ausgefallen" oder "Blume gießen, Feuchtigkeit < 45%").
-- 🛡️ **Allianz-Quests (E2E Verschlüsselung):** Erstelle Quests, die an Gefährten (Assignees) zugewiesen werden. Die Integration nutzt End-to-End Verschlüsselung, sodass Quests sicher über PocketBase an die TAQ-App verteilt werden.
-- 📱 **Push-Benachrichtigungen:** Aktiviere optional App-Benachrichtigungen, wenn ein bestimmter Quest von Home Assistant generiert wird.
-- ⚙️ **Konfigurations-UI:** Einfaches Anlegen und Verwalten der Regeln über die Home Assistant Benutzeroberfläche.
-- 🧹 **Zero-Knowledge Architecture:** Die gesamte Kommunikation mit der PocketBase Instanz wird mit deinem Master-Passwort bzw. Recovery-Code sicher und lokal verschlüsselt, bevor sie Home Assistant verlässt.
+- 🎮 **Das Smart Home wird zum Abenteuer**: Verwandle Hausarbeiten und Sensor-Warnungen (wie "Blume gießen" oder "Batterie schwach") automatisch in spannende Quests in der *Task as Quest* App.
+- 🛡️ **Allianz-Quests**: Verteile Aufträge direkt an deine Gefährten (Familienmitglieder/Mitbewohner). Home Assistant schickt die Quests gezielt an die richtigen Helden in deiner Gruppe.
+- 📱 **Push-Benachrichtigungen**: Lass dich und deine Gefährten auf dem Smartphone benachrichtigen, sobald das Smart Home einen neuen, epischen Auftrag für euch hat.
+- ⚙️ **Einfache Regeln**: Lege direkt in Home Assistant fest, bei welchen Sensor-Werten (z.B. Bodenfeuchtigkeit < 45%) ein neuer Quest am schwarzen Brett der App landen soll.
+- 🔒 **Maximale Sicherheit**: Deine Smart Home Daten bleiben privat. Die Integration kommuniziert absolut sicher und Ende-zu-Ende verschlüsselt mit der App – niemand außer deinen Gefährten kann eure Quests mitlesen.
 
 ## Installation via HACS
 
