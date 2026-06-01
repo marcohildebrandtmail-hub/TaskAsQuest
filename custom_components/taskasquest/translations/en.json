@@ -25,9 +25,10 @@
       }
     },
     "error": {
-      "auth_failed": "Authentication failed. Check login name, password, and 2FA code if enabled.",
-      "recovery_code_required": "This account uses encrypted quests. Enter the encryption code.",
-      "recovery_code_invalid": "The encryption code is invalid or does not belong to this account."
+      "auth_failed": "Authentication failed. Check your login name, password, and 2FA code if applicable.",
+      "cannot_connect": "Failed to connect to the server. Is the server reachable?",
+      "recovery_code_required": "This account uses encrypted quests. Please enter your recovery code.",
+      "recovery_code_invalid": "The recovery code is invalid or does not match this account."
     }
   },
   "options": {

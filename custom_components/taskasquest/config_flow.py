@@ -69,7 +69,7 @@ class TaskAsQuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             elif err_msg == "totp_required":
                 return await self.async_step_totp()
             else:
-                errors["base"] = "auth_failed"
+                errors["base"] = err_msg if err_msg else "auth_failed"
                 await client.close()
 
         return self.async_show_form(

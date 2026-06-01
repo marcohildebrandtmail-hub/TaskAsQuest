@@ -26,6 +26,7 @@
     },
     "error": {
       "auth_failed": "Authentifizierung fehlgeschlagen. Pruefe Login-Name, Passwort und ggf. 2FA-Code.",
+      "cannot_connect": "Verbindung zum Server fehlgeschlagen. Ist der Server erreichbar?",
       "recovery_code_required": "Dieser Account nutzt verschluesselte Quests. Bitte gib den Verschluesselungscode ein.",
       "recovery_code_invalid": "Der Verschluesselungscode ist ungueltig oder passt nicht zu diesem Account."
     }
