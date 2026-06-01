@@ -85,11 +85,12 @@ class PocketBaseClient:
         login_name: str,
         password: str,
         totp_code: str | None = None,
-    ) -> bool:
+    ) -> tuple[bool, str]:
         """Login with the app's username#number login identifier."""
         login_name = login_name.strip()
         if "@" in login_name:
-            return await self.authenticate(login_name, password)
+            res = await self.authenticate(login_name, password)
+            return (res, "auth_failed" if not res else "")
 
         display_base = login_name
         display_number = ""
@@ -107,20 +108,36 @@ class PocketBaseClient:
         if totp_code:
             payload["totp"] = totp_code.strip()
 
-        data = await self._request(
-            "POST",
-            "api/taq/login-bn",
-            json=payload,
-        )
-        if data and data.get("token") and data.get("record"):
-            self.token = data.get("token")
-            record = data.get("record", {})
-            self.user_record = record
-            self.user_id = record.get("id")
-            self.crypto_version = int(record.get("crypto_version") or 0)
-            _LOGGER.info("Task as Quest login OK, user_id=%s", self.user_id)
-            return True
-        return False
+        session = await self._get_session()
+        url = f"{self.base_url}/api/taq/login-bn"
+        try:
+            async with session.request("POST", url, json=payload, headers=self._headers()) as resp:
+                if resp.status in {200, 201}:
+                    data = await resp.json()
+                    if data and data.get("token") and data.get("record"):
+                        self.token = data.get("token")
+                        record = data.get("record", {})
+                        self.user_record = record
+                        self.user_id = record.get("id")
+                        self.crypto_version = int(record.get("crypto_version") or 0)
+                        _LOGGER.info("Task as Quest login OK, user_id=%s", self.user_id)
+                        return True, ""
+                
+                try:
+                    err_data = await resp.json()
+                    err_msg = err_data.get("message", "").lower()
+                    if "totp" in err_msg or "2fa" in err_msg:
+                        return False, "totp_required"
+                    elif "invalid" in err_msg or "failed" in err_msg:
+                        return False, "auth_failed"
+                    return False, err_data.get("message", "auth_failed")
+                except Exception:
+                    return False, "auth_failed"
+        except Exception as err:
+            _LOGGER.error("PocketBase connection error: %s", err)
+            return False, "cannot_connect"
+        
+        return False, "auth_failed"
 
     async def authenticate_with_token(self, token: str, user_id: str) -> bool:
         """Re-authenticate with stored token."""

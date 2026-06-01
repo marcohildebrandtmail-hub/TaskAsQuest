@@ -11,9 +11,9 @@
       },
       "totp": {
         "title": "2-Faktor-Authentifizierung (2FA)",
-        "description": "Falls du 2FA in der App aktiviert hast, gib den aktuellen Code hier ein. Wenn nicht, lass das Feld einfach leer und klicke auf Absenden.",
+        "description": "Dein Account ist durch 2FA geschuetzt. Bitte gib den aktuellen Code ein.",
         "data": {
-          "totp_code": "2FA-Code (optional)"
+          "totp_code": "2FA-Code"
         }
       },
       "recovery": {

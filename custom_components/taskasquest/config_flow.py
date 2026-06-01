@@ -50,9 +50,27 @@ class TaskAsQuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         user_input: dict[str, Any] | None = None,
     ) -> config_entries.ConfigFlowResult:
         """Create the integration entry."""
+        errors: dict[str, str] = {}
         if user_input is not None:
             self._login_data = user_input
-            return await self.async_step_totp()
+            
+            client = PocketBaseClient(DEFAULT_PB_URL)
+            success, err_msg = await client.authenticate_login_name(
+                user_input[CONF_LOGIN_NAME],
+                user_input[CONF_PASSWORD],
+            )
+            
+            if success:
+                self._client = client
+                if client.crypto_version == 1:
+                    return await self.async_step_recovery()
+                else:
+                    return await self._async_create_final_entry()
+            elif err_msg == "totp_required":
+                return await self.async_step_totp()
+            else:
+                errors["base"] = "auth_failed"
+                await client.close()
 
         return self.async_show_form(
             step_id="user",
@@ -64,6 +82,7 @@ class TaskAsQuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                 }
             ),
+            errors=errors,
         )
 
     async def async_step_totp(
@@ -78,13 +97,13 @@ class TaskAsQuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._login_data[CONF_TOTP_CODE] = totp_code
             
             client = PocketBaseClient(DEFAULT_PB_URL)
-            authenticated = await client.authenticate_login_name(
+            success, err_msg = await client.authenticate_login_name(
                 self._login_data[CONF_LOGIN_NAME],
                 self._login_data[CONF_PASSWORD],
                 totp_code if totp_code else None,
             )
 
-            if authenticated:
+            if success:
                 self._client = client
                 if client.crypto_version == 1:
                     return await self.async_step_recovery()
@@ -98,7 +117,7 @@ class TaskAsQuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="totp",
             data_schema=vol.Schema(
                 {
-                    vol.Optional(CONF_TOTP_CODE): str,
+                    vol.Required(CONF_TOTP_CODE): str,
                 }
             ),
             errors=errors,
