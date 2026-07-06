@@ -1,4 +1,4 @@
-"""Task as Quest zero-knowledge task crypto helpers."""
+"""Helpers for protected task fields."""
 
 from __future__ import annotations
 
@@ -18,8 +18,8 @@ HKDF_INFO = b"taq-qk-wrap-v1"
 ENC_FIELDS = ("title", "description", "original_task", "user_description")
 
 
-class TaskCryptoError(Exception):
-    """Raised when Task as Quest crypto setup or operations fail."""
+class ProtectedFieldsError(Exception):
+    """Raised when protected task fields cannot be opened."""
 
 
 def _b64decode(value: str) -> bytes:
@@ -33,7 +33,7 @@ def _b64encode(value: bytes) -> str:
 def _aes_gcm_decrypt(key: bytes, packed_b64: str) -> bytes:
     packed = _b64decode(packed_b64)
     if len(packed) <= 12:
-        raise TaskCryptoError("Invalid encrypted payload")
+        raise ProtectedFieldsError("Invalid encrypted payload")
     return AESGCM(key).decrypt(packed[:12], packed[12:], None)
 
 
@@ -43,16 +43,14 @@ def _aes_gcm_encrypt(key: bytes, plain: bytes) -> str:
     return _b64encode(iv + cipher)
 
 
-def recovery_code_hash(recovery_code: str) -> str:
-    """Return the app-compatible SHA-256/Base64 hash of a recovery code."""
+def _recovery_code_hash(recovery_code: str) -> str:
     return _b64encode(hashlib.sha256(recovery_code.encode()).digest())
 
 
-def verify_recovery_code(recovery_code: str, expected_hash: str | None) -> bool:
-    """Return whether a recovery code matches the stored user hash."""
+def _verify_recovery_code(recovery_code: str, expected_hash: str | None) -> bool:
     if not recovery_code or not expected_hash:
         return False
-    return recovery_code_hash(recovery_code.strip()) == expected_hash
+    return _recovery_code_hash(recovery_code.strip()) == expected_hash
 
 
 def _derive_wrap_key(
@@ -69,48 +67,48 @@ def _derive_wrap_key(
 
 
 @dataclass(slots=True)
-class TaskCrypto:
-    """Encrypt and decrypt Task as Quest task fields."""
+class ProtectedFields:
+    """Encrypt and decrypt protected task fields."""
 
     master_key: bytes
     private_key: ec.EllipticCurvePrivateKey
     public_key: ec.EllipticCurvePublicKey
 
     @classmethod
-    def from_user_record(cls, user_record: dict[str, Any], recovery_code: str) -> TaskCrypto:
-        """Build crypto state from a PocketBase user record and recovery code."""
-        if not verify_recovery_code(
+    def from_user_record(cls, user_record: dict[str, Any], recovery_code: str) -> ProtectedFields:
+        """Build protected-field state from an account record and recovery code."""
+        if not _verify_recovery_code(
             recovery_code,
             user_record.get("recovery_code_hash"),
         ):
-            raise TaskCryptoError("Invalid recovery code")
+            raise ProtectedFieldsError("Invalid recovery code")
 
         master_key = _b64decode(recovery_code.strip())
         if len(master_key) != 32:
-            raise TaskCryptoError("Invalid recovery code length")
+            raise ProtectedFieldsError("Invalid recovery code length")
 
         priv_wrapped = user_record.get("priv_key_wrapped")
         pub_key = user_record.get("pub_key")
         if not priv_wrapped or not pub_key:
-            raise TaskCryptoError("Missing crypto keys in user record")
+            raise ProtectedFieldsError("Missing keys in account record")
 
         try:
             priv_der = _aes_gcm_decrypt(master_key, priv_wrapped)
             private_key = serialization.load_der_private_key(priv_der, password=None)
             public_key = serialization.load_der_public_key(_b64decode(pub_key))
         except (ValueError, InvalidTag) as err:
-            raise TaskCryptoError("Could not unlock task crypto") from err
+            raise ProtectedFieldsError("Could not unlock protected fields") from err
 
         if not isinstance(private_key, ec.EllipticCurvePrivateKey) or not isinstance(
             public_key,
             ec.EllipticCurvePublicKey,
         ):
-            raise TaskCryptoError("Unsupported crypto key type")
+            raise ProtectedFieldsError("Unsupported key type")
 
         return cls(master_key=master_key, private_key=private_key, public_key=public_key)
 
     def encrypt_task_write(self, plain: dict[str, str | None]) -> tuple[dict[str, Any], bytes]:
-        """Encrypt app-sensitive task fields and wrap the quest key for the owner."""
+        """Encrypt protected task fields."""
         quest_key = os.urandom(32)
         payload: dict[str, Any] = {"crypto_version": 1}
 
@@ -120,11 +118,11 @@ class TaskCrypto:
                 None if value is None or value == "" else _aes_gcm_encrypt(quest_key, value.encode())
             )
 
-        payload["quest_key_wrapped"] = self.wrap_quest_key(quest_key, self.public_key)
+        payload["quest_key_wrapped"] = self.wrap_task_key(quest_key, self.public_key)
         return payload, quest_key
 
     def decrypt_task_read(self, record: dict[str, Any]) -> dict[str, Any]:
-        """Decrypt encrypted task fields for display in Home Assistant."""
+        """Decrypt protected task fields for display."""
         if record.get("crypto_version") != 1:
             return record
 
@@ -139,8 +137,8 @@ class TaskCrypto:
             }
 
         try:
-            quest_key = self.unwrap_quest_key(wrapped)
-        except TaskCryptoError:
+            quest_key = self.unwrap_task_key(wrapped)
+        except ProtectedFieldsError:
             return {
                 **record,
                 "title": "(Entschluesselung fehlgeschlagen)",
@@ -161,12 +159,12 @@ class TaskCrypto:
                 out[field] = "(Feld-Entschluesselung fehlgeschlagen)"
         return out
 
-    def wrap_quest_key(
+    def wrap_task_key(
         self,
         quest_key: bytes,
         recipient_public_key: ec.EllipticCurvePublicKey,
     ) -> str:
-        """Wrap a raw quest key for a recipient public key."""
+        """Wrap a raw task key for a recipient public key."""
         ephemeral_private_key = ec.generate_private_key(ec.SECP256R1())
         ephemeral_public_der = ephemeral_private_key.public_key().public_bytes(
             encoding=serialization.Encoding.DER,
@@ -178,35 +176,35 @@ class TaskCrypto:
         length = len(ephemeral_public_der).to_bytes(2, "big")
         return _b64encode(length + ephemeral_public_der + iv + cipher)
 
-    def wrap_quest_key_for_b64_pub(self, quest_key: bytes, pub_key_b64: str) -> str:
-        """Wrap a raw quest key using a Base64-encoded DER public key."""
+    def wrap_task_key_for_b64_pub(self, quest_key: bytes, pub_key_b64: str) -> str:
+        """Wrap a raw task key using a Base64-encoded DER public key."""
         try:
             pub_der = _b64decode(pub_key_b64)
             recipient_public_key = serialization.load_der_public_key(pub_der)
             if not isinstance(recipient_public_key, ec.EllipticCurvePublicKey):
-                raise TaskCryptoError("Unsupported recipient key type")
-            return self.wrap_quest_key(quest_key, recipient_public_key)
+                raise ProtectedFieldsError("Unsupported recipient key type")
+            return self.wrap_task_key(quest_key, recipient_public_key)
         except Exception as err:
-            raise TaskCryptoError("Could not wrap quest key for recipient") from err
+            raise ProtectedFieldsError("Could not wrap task key for recipient") from err
 
-    def unwrap_quest_key(self, wrapped_b64: str) -> bytes:
-        """Unwrap a task quest key with this user's private key."""
+    def unwrap_task_key(self, wrapped_b64: str) -> bytes:
+        """Unwrap a task key with this account's private key."""
         packed = _b64decode(wrapped_b64)
         if len(packed) < 2:
-            raise TaskCryptoError("Invalid wrapped quest key")
+            raise ProtectedFieldsError("Invalid wrapped key")
 
         pub_len = int.from_bytes(packed[:2], "big")
         pub_end = 2 + pub_len
         iv_end = pub_end + 12
         if len(packed) <= iv_end:
-            raise TaskCryptoError("Invalid wrapped quest key")
+            raise ProtectedFieldsError("Invalid wrapped key")
 
         ephemeral_public = serialization.load_der_public_key(packed[2:pub_end])
         if not isinstance(ephemeral_public, ec.EllipticCurvePublicKey):
-            raise TaskCryptoError("Unsupported ephemeral key type")
+            raise ProtectedFieldsError("Unsupported ephemeral key type")
 
         wrap_key = _derive_wrap_key(self.private_key, ephemeral_public)
         try:
             return AESGCM(wrap_key).decrypt(packed[pub_end:iv_end], packed[iv_end:], None)
         except InvalidTag as err:
-            raise TaskCryptoError("Could not unwrap quest key") from err
+            raise ProtectedFieldsError("Could not unwrap key") from err

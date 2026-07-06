@@ -39,10 +39,3 @@ create_quest:
       example: "2026-06-01"
       selector:
         text:
-    is_allianz:
-      name: Allianz Quest
-      description: Assign this to your Allianz (assignees).
-      required: false
-      default: false
-      selector:
-        boolean:

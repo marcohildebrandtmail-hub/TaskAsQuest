@@ -2,16 +2,13 @@
 
 DOMAIN = "taskasquest"
 
-DEFAULT_PB_URL = "https://app.taskasquest.de"
+DEFAULT_APP_URL = "https://app.taskasquest.de"
 
-CONF_PB_URL = "pocketbase_url"
-CONF_EMAIL = "email"
+CONF_APP_URL = "app_url"
 CONF_LOGIN_NAME = "login_name"
 CONF_PASSWORD = "password"
 CONF_RECOVERY_CODE = "recovery_code"
 CONF_TOTP_CODE = "totp_code"
-CONF_USER_ID = "user_id"
-CONF_AUTH_TOKEN = "auth_token"
 CONF_RULES = "rules"
 
 # Rule fields

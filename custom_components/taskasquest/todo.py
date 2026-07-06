@@ -72,7 +72,6 @@ class TaskAsQuestTodoList(CoordinatorEntity[TaskAsQuestCoordinator], TodoListEnt
     async def async_update_todo_item(self, item: TodoItem) -> None:
         """Update a quest (mark as completed)."""
         if item.status == TodoItemStatus.COMPLETED:
-            # Wir markieren den Task in PocketBase als erledigt
             success = await self.coordinator.client.update_task_status(item.uid, "completed")
             if success:
                 await self.coordinator.async_refresh()

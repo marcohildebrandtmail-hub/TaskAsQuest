@@ -12,12 +12,13 @@ from homeassistant.helpers import selector
 
 from .const import (
     CONDITIONS,
+    CONF_APP_URL,
     CONF_LOGIN_NAME,
     CONF_PASSWORD,
     CONF_RECOVERY_CODE,
     CONF_RULES,
     CONF_TOTP_CODE,
-    DEFAULT_PB_URL,
+    DEFAULT_APP_URL,
     DEFAULT_COOLDOWN,
     DIFFICULTIES,
     DOMAIN,
@@ -32,7 +33,7 @@ from .const import (
     RULE_TASK_TITLE,
     RULE_VALUE,
 )
-from .pocketbase_client import PocketBaseClient
+from .app_client import TaskAsQuestClient
 
 
 class TaskAsQuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -43,7 +44,7 @@ class TaskAsQuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def __init__(self) -> None:
         """Initialize the config flow."""
         self._login_data: dict[str, Any] = {}
-        self._client: PocketBaseClient | None = None
+        self._client: TaskAsQuestClient | None = None
 
     async def async_step_user(
         self,
@@ -54,15 +55,15 @@ class TaskAsQuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             self._login_data = user_input
             
-            client = PocketBaseClient(DEFAULT_PB_URL)
-            success, err_msg = await client.authenticate_login_name(
+            client = TaskAsQuestClient(user_input[CONF_APP_URL])
+            success, err_msg = await client.authenticate(
                 user_input[CONF_LOGIN_NAME],
                 user_input[CONF_PASSWORD],
             )
             
             if success:
                 self._client = client
-                if client.crypto_version == 1:
+                if client.protection_version == 1:
                     return await self.async_step_recovery()
                 else:
                     return await self._async_create_final_entry()
@@ -76,6 +77,7 @@ class TaskAsQuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=vol.Schema(
                 {
+                    vol.Required(CONF_APP_URL, default=DEFAULT_APP_URL): str,
                     vol.Required(CONF_LOGIN_NAME): str,
                     vol.Required(CONF_PASSWORD): selector.TextSelector(
                         selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
@@ -96,8 +98,8 @@ class TaskAsQuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             totp_code = user_input.get(CONF_TOTP_CODE, "")
             self._login_data[CONF_TOTP_CODE] = totp_code
             
-            client = PocketBaseClient(DEFAULT_PB_URL)
-            success, err_msg = await client.authenticate_login_name(
+            client = TaskAsQuestClient(self._login_data[CONF_APP_URL])
+            success, err_msg = await client.authenticate(
                 self._login_data[CONF_LOGIN_NAME],
                 self._login_data[CONF_PASSWORD],
                 totp_code if totp_code else None,
@@ -105,7 +107,7 @@ class TaskAsQuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             if success:
                 self._client = client
-                if client.crypto_version == 1:
+                if client.protection_version == 1:
                     return await self.async_step_recovery()
                 else:
                     return await self._async_create_final_entry()
@@ -134,7 +136,7 @@ class TaskAsQuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             recovery_code = user_input.get(CONF_RECOVERY_CODE, "")
             if not recovery_code:
                 errors["base"] = "recovery_code_required"
-            elif not self._client.unlock_task_crypto(recovery_code):
+            elif not self._client.unlock_protected_fields(recovery_code):
                 errors["base"] = "recovery_code_invalid"
             else:
                 self._login_data[CONF_RECOVERY_CODE] = recovery_code
@@ -161,7 +163,6 @@ class TaskAsQuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         entry_data.pop(CONF_TOTP_CODE, None)
         
         user_id = self._client.user_id
-        auth_token = self._client.token
         await self._client.close()
         
         return self.async_create_entry(
@@ -169,7 +170,6 @@ class TaskAsQuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data={
                 **entry_data,
                 "user_id": user_id,
-                "auth_token": auth_token,
             },
             options={CONF_RULES: []},
         )

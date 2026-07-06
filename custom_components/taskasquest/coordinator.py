@@ -25,7 +25,7 @@ from .const import (
     RULE_VALUE,
 )
 from homeassistant.util import dt as dt_util
-from .pocketbase_client import PocketBaseClient
+from .app_client import TaskAsQuestClient
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ class TaskAsQuestCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self,
         hass: HomeAssistant,
         entry: ConfigEntry,
-        client: PocketBaseClient,
+        client: TaskAsQuestClient,
         rules: list[dict[str, Any]] | None,
     ) -> None:
         super().__init__(

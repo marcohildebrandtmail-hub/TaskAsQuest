@@ -9,17 +9,16 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
 
 from .const import (
-    CONF_AUTH_TOKEN,
+    CONF_APP_URL,
     CONF_PASSWORD,
     CONF_LOGIN_NAME,
     CONF_RECOVERY_CODE,
     CONF_RULES,
-    CONF_USER_ID,
-    DEFAULT_PB_URL,
+    DEFAULT_APP_URL,
     DOMAIN,
 )
 from .coordinator import TaskAsQuestCoordinator
-from .pocketbase_client import PocketBaseClient
+from .app_client import TaskAsQuestClient
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -32,7 +31,6 @@ SERVICE_SCHEMA_CREATE_QUEST = vol.Schema(
         vol.Optional("difficulty", default="medium"): vol.In(["easy", "medium", "hard", "epic"]),
         vol.Optional("description"): cv.string,
         vol.Optional("due_date"): cv.string,
-        vol.Optional("is_allianz", default=False): cv.boolean,
     }
 )
 
@@ -41,38 +39,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Task as Quest from config entry."""
     hass.data.setdefault(DOMAIN, {})
 
-    client = PocketBaseClient(DEFAULT_PB_URL)
-
-    # Erst Token probieren, dann Passwort
-    token = entry.data.get(CONF_AUTH_TOKEN, "")
-    user_id = entry.data.get(CONF_USER_ID, "")
-    authenticated = False
-
-    if token and user_id:
-        authenticated = await client.authenticate_with_token(token, user_id)
-
-    if not authenticated:
-        login_name = entry.data.get(CONF_LOGIN_NAME) or entry.data.get("email", "")
-        authenticated = await client.authenticate_login_name(
-            login_name, entry.data[CONF_PASSWORD]
-        )
+    client = TaskAsQuestClient(entry.data.get(CONF_APP_URL, DEFAULT_APP_URL))
+    login_name = entry.data.get(CONF_LOGIN_NAME) or entry.data.get("email", "")
+    authenticated, _ = await client.authenticate(login_name, entry.data[CONF_PASSWORD])
 
     if not authenticated:
         _LOGGER.error("Task as Quest: Authentifizierung fehlgeschlagen")
         await client.close()
         return False
 
-    if not client.unlock_task_crypto(entry.data.get(CONF_RECOVERY_CODE, "")):
+    if not client.unlock_protected_fields(entry.data.get(CONF_RECOVERY_CODE, "")):
         _LOGGER.error("Task as Quest: Verschluesselungs-Code fehlt oder ist ungueltig")
         await client.close()
         return False
-
-    # Token in config aktualisieren
-    if client.token != token:
-        hass.config_entries.async_update_entry(
-            entry,
-            data={**entry.data, CONF_AUTH_TOKEN: client.token, CONF_USER_ID: client.user_id},
-        )
 
     rules = entry.options.get(CONF_RULES, [])
     coordinator = TaskAsQuestCoordinator(hass, entry, client, rules)
@@ -88,7 +67,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             difficulty=call.data["difficulty"],
             description=call.data.get("description"),
             due_date=call.data.get("due_date"),
-            is_allianz=call.data.get("is_allianz", False),
         )
         await coordinator.async_refresh()
 

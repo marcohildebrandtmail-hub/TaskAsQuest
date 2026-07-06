@@ -3,8 +3,9 @@
     "step": {
       "user": {
         "title": "Task as Quest - Login",
-        "description": "Verbinde Home Assistant mit deinem Task as Quest Account. Format: Name#0001 (vierstellige Nummer).",
+        "description": "Verbinde Home Assistant mit deinem Task as Quest Account.",
         "data": {
+          "app_url": "Server-Adresse",
           "login_name": "Login-Name (Name#0001)",
           "password": "Passwort"
         }
