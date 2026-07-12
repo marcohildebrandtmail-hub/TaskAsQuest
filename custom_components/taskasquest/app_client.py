@@ -148,17 +148,17 @@ class TaskAsQuestClient:
         self._last_token_refresh = now
         return True
 
-    def unlock_protected_fields(self, recovery_code: str | None) -> bool:
-        """Unlock protected task fields when the account requires it."""
+    def unlock_protected_fields(self, password: str) -> bool:
+        """Unlock protected task fields with the account password."""
         if self.protection_version != 1:
             self.protected_fields = None
             return True
-        if not self.user_record or not recovery_code:
+        if not self.user_record or not password:
             return False
         try:
             self.protected_fields = ProtectedFields.from_user_record(
                 self.user_record,
-                recovery_code,
+                password,
             )
         except ProtectedFieldsError as err:
             _LOGGER.error("Task as Quest protected fields unlock failed: %s", err)

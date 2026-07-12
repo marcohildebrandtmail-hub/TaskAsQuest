@@ -14,7 +14,6 @@ from .const import (
     CONF_AUTH_TOKEN,
     CONF_PASSWORD,
     CONF_LOGIN_NAME,
-    CONF_RECOVERY_CODE,
     CONF_RULES,
     CONF_USER_ID,
     DEFAULT_APP_URL,
@@ -62,16 +61,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.config_entries.async_update_entry(
         entry,
         data={
-            **entry.data,
+            **{
+                key: value
+                for key, value in entry.data.items()
+                if key != "recovery_code"
+            },
             CONF_AUTH_TOKEN: client.token,
             CONF_USER_ID: client.user_id,
         },
     )
 
-    if not client.unlock_protected_fields(entry.data.get(CONF_RECOVERY_CODE, "")):
-        _LOGGER.error("Task as Quest: Verschluesselungs-Code fehlt oder ist ungueltig")
+    if not client.unlock_protected_fields(entry.data[CONF_PASSWORD]):
+        _LOGGER.error("Task as Quest: Verschluesselung konnte nicht entsperrt werden")
         await client.close()
-        return False
+        raise ConfigEntryAuthFailed(
+            "Task as Quest encryption could not be unlocked with the account password"
+        )
 
     rules = entry.options.get(CONF_RULES, [])
     coordinator = TaskAsQuestCoordinator(hass, entry, client, rules)

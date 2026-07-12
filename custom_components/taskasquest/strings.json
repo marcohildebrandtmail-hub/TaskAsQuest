@@ -24,20 +24,12 @@
         "data": {
           "totp_code": "2FA-Code"
         }
-      },
-      "recovery": {
-        "title": "Verschluesselte Quests",
-        "description": "Dein Account nutzt End-to-End Verschluesselung. Bitte gib deinen Verschluesselungscode ein.",
-        "data": {
-          "recovery_code": "Verschluesselungscode"
-        }
       }
     },
     "error": {
       "auth_failed": "Authentifizierung fehlgeschlagen. Pruefe Login-Name, Passwort und ggf. 2FA-Code.",
       "cannot_connect": "Verbindung zum Server fehlgeschlagen. Ist der Server erreichbar?",
-      "recovery_code_required": "Dieser Account nutzt verschluesselte Quests. Bitte gib den Verschluesselungscode ein.",
-      "recovery_code_invalid": "Der Verschluesselungscode ist ungueltig oder passt nicht zu diesem Account."
+      "encryption_unlock_failed": "Die Verschluesselung konnte mit dem Account-Passwort nicht entsperrt werden."
     }
   },
   "options": {

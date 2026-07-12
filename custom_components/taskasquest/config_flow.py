@@ -16,7 +16,6 @@ from .const import (
     CONF_AUTH_TOKEN,
     CONF_LOGIN_NAME,
     CONF_PASSWORD,
-    CONF_RECOVERY_CODE,
     CONF_RULES,
     CONF_TOTP_CODE,
     CONF_USER_ID,
@@ -61,7 +60,6 @@ class TaskAsQuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_APP_URL: entry_data.get(CONF_APP_URL, DEFAULT_APP_URL),
             CONF_LOGIN_NAME: entry_data.get(CONF_LOGIN_NAME, ""),
             CONF_PASSWORD: entry_data.get(CONF_PASSWORD, ""),
-            CONF_RECOVERY_CODE: entry_data.get(CONF_RECOVERY_CODE, ""),
         }
         return await self.async_step_reauth_confirm()
 
@@ -80,8 +78,16 @@ class TaskAsQuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
             if success:
                 self._client = client
-                if client.protection_version == 1:
-                    return await self.async_step_recovery()
+                if not client.unlock_protected_fields(
+                    self._login_data[CONF_PASSWORD]
+                ):
+                    errors["base"] = "encryption_unlock_failed"
+                    await client.close()
+                    return self.async_show_form(
+                        step_id="reauth_confirm",
+                        data_schema=self._reauth_schema(),
+                        errors=errors,
+                    )
                 return await self._async_create_final_entry()
             if err_msg == "totp_required":
                 await client.close()
@@ -91,20 +97,24 @@ class TaskAsQuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="reauth_confirm",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(
-                        CONF_LOGIN_NAME,
-                        default=self._login_data.get(CONF_LOGIN_NAME, ""),
-                    ): str,
-                    vol.Required(CONF_PASSWORD): selector.TextSelector(
-                        selector.TextSelectorConfig(
-                            type=selector.TextSelectorType.PASSWORD
-                        )
-                    ),
-                }
-            ),
+            data_schema=self._reauth_schema(),
             errors=errors,
+        )
+
+    def _reauth_schema(self) -> vol.Schema:
+        """Return the reauthentication form schema."""
+        return vol.Schema(
+            {
+                vol.Required(
+                    CONF_LOGIN_NAME,
+                    default=self._login_data.get(CONF_LOGIN_NAME, ""),
+                ): str,
+                vol.Required(CONF_PASSWORD): selector.TextSelector(
+                    selector.TextSelectorConfig(
+                        type=selector.TextSelectorType.PASSWORD
+                    )
+                ),
+            }
         )
 
     async def async_step_user(
@@ -124,8 +134,9 @@ class TaskAsQuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             
             if success:
                 self._client = client
-                if client.protection_version == 1:
-                    return await self.async_step_recovery()
+                if not client.unlock_protected_fields(user_input[CONF_PASSWORD]):
+                    errors["base"] = "encryption_unlock_failed"
+                    await client.close()
                 else:
                     return await self._async_create_final_entry()
             elif err_msg == "totp_required":
@@ -168,8 +179,11 @@ class TaskAsQuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             if success:
                 self._client = client
-                if client.protection_version == 1:
-                    return await self.async_step_recovery()
+                if not client.unlock_protected_fields(
+                    self._login_data[CONF_PASSWORD]
+                ):
+                    errors["base"] = "encryption_unlock_failed"
+                    await client.close()
                 else:
                     return await self._async_create_final_entry()
             else:
@@ -186,35 +200,6 @@ class TaskAsQuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_recovery(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> config_entries.ConfigFlowResult:
-        """Handle recovery code if crypto is enabled."""
-        errors: dict[str, str] = {}
-
-        if user_input is not None:
-            recovery_code = user_input.get(CONF_RECOVERY_CODE, "")
-            if not recovery_code:
-                errors["base"] = "recovery_code_required"
-            elif not self._client.unlock_protected_fields(recovery_code):
-                errors["base"] = "recovery_code_invalid"
-            else:
-                self._login_data[CONF_RECOVERY_CODE] = recovery_code
-                return await self._async_create_final_entry()
-
-        return self.async_show_form(
-            step_id="recovery",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_RECOVERY_CODE): selector.TextSelector(
-                        selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
-                    ),
-                }
-            ),
-            errors=errors,
-        )
-
     async def _async_create_final_entry(self) -> config_entries.ConfigFlowResult:
         """Finalize the creation of the config entry."""
         await self.async_set_unique_id(self._client.user_id)
@@ -223,6 +208,7 @@ class TaskAsQuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         
         entry_data = dict(self._login_data)
         entry_data.pop(CONF_TOTP_CODE, None)
+        entry_data.pop("recovery_code", None)
         entry_data[CONF_AUTH_TOKEN] = self._client.token
         entry_data[CONF_USER_ID] = self._client.user_id
         
@@ -232,7 +218,14 @@ class TaskAsQuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if self._reauth_entry is not None:
             return self.async_update_reload_and_abort(
                 self._reauth_entry,
-                data={**self._reauth_entry.data, **entry_data},
+                data={
+                    **{
+                        key: value
+                        for key, value in self._reauth_entry.data.items()
+                        if key != "recovery_code"
+                    },
+                    **entry_data,
+                },
             )
 
         return self.async_create_entry(

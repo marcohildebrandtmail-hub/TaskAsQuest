@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import hashlib
 import os
 from dataclasses import dataclass
 from typing import Any
@@ -13,8 +12,10 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 HKDF_INFO = b"taq-qk-wrap-v1"
+PBKDF2_ITERATIONS = 200_000
 ENC_FIELDS = ("title", "description", "original_task", "user_description")
 
 
@@ -43,16 +44,6 @@ def _aes_gcm_encrypt(key: bytes, plain: bytes) -> str:
     return _b64encode(iv + cipher)
 
 
-def _recovery_code_hash(recovery_code: str) -> str:
-    return _b64encode(hashlib.sha256(recovery_code.encode()).digest())
-
-
-def _verify_recovery_code(recovery_code: str, expected_hash: str | None) -> bool:
-    if not recovery_code or not expected_hash:
-        return False
-    return _recovery_code_hash(recovery_code.strip()) == expected_hash
-
-
 def _derive_wrap_key(
     private_key: ec.EllipticCurvePrivateKey,
     public_key: ec.EllipticCurvePublicKey,
@@ -70,29 +61,29 @@ def _derive_wrap_key(
 class ProtectedFields:
     """Encrypt and decrypt protected task fields."""
 
-    master_key: bytes
     private_key: ec.EllipticCurvePrivateKey
     public_key: ec.EllipticCurvePublicKey
 
     @classmethod
-    def from_user_record(cls, user_record: dict[str, Any], recovery_code: str) -> ProtectedFields:
-        """Build protected-field state from an account record and recovery code."""
-        if not _verify_recovery_code(
-            recovery_code,
-            user_record.get("recovery_code_hash"),
-        ):
-            raise ProtectedFieldsError("Invalid recovery code")
-
-        master_key = _b64decode(recovery_code.strip())
-        if len(master_key) != 32:
-            raise ProtectedFieldsError("Invalid recovery code length")
-
+    def from_user_record(cls, user_record: dict[str, Any], password: str) -> ProtectedFields:
+        """Unlock protected fields with the normal account password."""
+        user_id = user_record.get("id")
+        mk_wrapped = user_record.get("mk_wrapped")
         priv_wrapped = user_record.get("priv_key_wrapped")
         pub_key = user_record.get("pub_key")
-        if not priv_wrapped or not pub_key:
+        if not user_id or not mk_wrapped or not priv_wrapped or not pub_key:
             raise ProtectedFieldsError("Missing keys in account record")
 
         try:
+            password_key = PBKDF2HMAC(
+                algorithm=hashes.SHA256(),
+                length=32,
+                salt=user_id.encode(),
+                iterations=PBKDF2_ITERATIONS,
+            ).derive(password.encode())
+            master_key = _aes_gcm_decrypt(password_key, mk_wrapped)
+            if len(master_key) != 32:
+                raise ProtectedFieldsError("Invalid master key")
             priv_der = _aes_gcm_decrypt(master_key, priv_wrapped)
             private_key = serialization.load_der_private_key(priv_der, password=None)
             public_key = serialization.load_der_public_key(_b64decode(pub_key))
@@ -105,7 +96,7 @@ class ProtectedFields:
         ):
             raise ProtectedFieldsError("Unsupported key type")
 
-        return cls(master_key=master_key, private_key=private_key, public_key=public_key)
+        return cls(private_key=private_key, public_key=public_key)
 
     def encrypt_task_write(self, plain: dict[str, str | None]) -> tuple[dict[str, Any], bytes]:
         """Encrypt protected task fields."""

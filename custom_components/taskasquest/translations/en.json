@@ -24,20 +24,12 @@
         "data": {
           "totp_code": "2FA code (optional)"
         }
-      },
-      "recovery": {
-        "title": "Encrypted Quests",
-        "description": "Your account uses End-to-End Encryption. Please enter your encryption code.",
-        "data": {
-          "recovery_code": "Encryption code"
-        }
       }
     },
     "error": {
       "auth_failed": "Authentication failed. Check your login name, password, and 2FA code if applicable.",
       "cannot_connect": "Failed to connect to the server. Is the server reachable?",
-      "recovery_code_required": "This account uses encrypted quests. Please enter your recovery code.",
-      "recovery_code_invalid": "The recovery code is invalid or does not match this account."
+      "encryption_unlock_failed": "Encryption could not be unlocked with the account password."
     }
   },
   "options": {
