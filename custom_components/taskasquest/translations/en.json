@@ -10,6 +10,14 @@
           "password": "Password"
         }
       },
+      "reauth_confirm": {
+        "title": "Sign in to Task as Quest again",
+        "description": "The session has expired. Sign in again; existing rules will be preserved.",
+        "data": {
+          "login_name": "Login name",
+          "password": "Password"
+        }
+      },
       "totp": {
         "title": "Two-Factor Authentication (2FA)",
         "description": "If you have 2FA enabled in the app, enter the current code here. Otherwise, leave the field empty and click submit.",

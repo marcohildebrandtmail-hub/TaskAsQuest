@@ -10,6 +10,14 @@
           "password": "Passwort"
         }
       },
+      "reauth_confirm": {
+        "title": "Task as Quest erneut anmelden",
+        "description": "Die Sitzung ist abgelaufen. Melde dich erneut an; vorhandene Regeln bleiben erhalten.",
+        "data": {
+          "login_name": "Login-Name",
+          "password": "Passwort"
+        }
+      },
       "totp": {
         "title": "2-Faktor-Authentifizierung (2FA)",
         "description": "Falls du 2FA in der App aktiviert hast, gib den aktuellen Code hier ein. Wenn nicht, lass das Feld einfach leer und klicke auf Absenden.",

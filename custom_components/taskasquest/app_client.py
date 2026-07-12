@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime, timezone
 
 import aiohttp
@@ -12,6 +13,7 @@ from .protected_fields import ProtectedFields, ProtectedFieldsError
 _LOGGER = logging.getLogger(__name__)
 
 _LOGIN_PATH = "api/taq/login-bn"
+_REFRESH_PATH = "api/collections/taq_users/auth-refresh"
 _TASKS_PATH = "api/collections/taq_tasks/records"
 _ASSIGNEES_PATH = "api/collections/taq_task_assignees/records"
 _COMPANIONS_PATH = "api/collections/taq_party_members/records"
@@ -29,6 +31,7 @@ class TaskAsQuestClient:
         self.user_record: dict | None = None
         self.protected_fields: ProtectedFields | None = None
         self._session: aiohttp.ClientSession | None = None
+        self._last_token_refresh = 0.0
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
@@ -120,6 +123,30 @@ class TaskAsQuestClient:
         except aiohttp.ClientError as err:
             _LOGGER.error("Task as Quest connection error: %s", err)
             return False, "cannot_connect"
+
+    async def authenticate_with_token(self, token: str, user_id: str) -> bool:
+        """Restore and refresh a previously authenticated session."""
+        self.token = token
+        self.user_id = user_id
+        return await self.refresh_auth(force=True)
+
+    async def refresh_auth(self, force: bool = False) -> bool:
+        """Refresh the session token at most once per hour."""
+        if not self.token or not self.user_id:
+            return False
+        now = time.monotonic()
+        if not force and now - self._last_token_refresh < 3600:
+            return True
+        data = await self._request("POST", _REFRESH_PATH)
+        if not data or not data.get("token") or not data.get("record"):
+            return False
+        self.token = data["token"]
+        record = data["record"]
+        self.user_record = record
+        self.user_id = record.get("id", self.user_id)
+        self.protection_version = int(record.get("crypto_version") or 0)
+        self._last_token_refresh = now
+        return True
 
     def unlock_protected_fields(self, recovery_code: str | None) -> bool:
         """Unlock protected task fields when the account requires it."""

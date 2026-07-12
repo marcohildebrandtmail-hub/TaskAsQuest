@@ -8,9 +8,12 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
+    CONF_AUTH_TOKEN,
+    CONF_USER_ID,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     RULE_CONDITION,
@@ -61,6 +64,20 @@ class TaskAsQuestCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch current data and evaluate automation rules."""
         try:
+            old_token = self.client.token
+            if not await self.client.refresh_auth():
+                raise ConfigEntryAuthFailed(
+                    "Task as Quest session expired; reauthentication required"
+                )
+            if self.client.token != old_token:
+                self.hass.config_entries.async_update_entry(
+                    self.config_entry,
+                    data={
+                        **self.config_entry.data,
+                        CONF_AUTH_TOKEN: self.client.token,
+                        CONF_USER_ID: self.client.user_id,
+                    },
+                )
             open_tasks = await self.client.get_open_tasks()
             self.open_task_count = len(open_tasks)
             created = await self._async_evaluate_rules()
@@ -72,6 +89,8 @@ class TaskAsQuestCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "rules_active": sum(1 for rule in self.rules if rule.get(RULE_ENABLED, True)),
                 "tasks_created_this_update": created,
             }
+        except ConfigEntryAuthFailed:
+            raise
         except Exception as err:  # noqa: BLE001 - HA coordinators should surface UpdateFailed.
             raise UpdateFailed(f"Task as Quest update failed: {err}") from err
 

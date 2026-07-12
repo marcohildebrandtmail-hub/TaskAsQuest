@@ -5,10 +5,12 @@ DOMAIN = "taskasquest"
 DEFAULT_APP_URL = "https://app.taskasquest.de"
 
 CONF_APP_URL = "app_url"
+CONF_AUTH_TOKEN = "auth_token"
 CONF_LOGIN_NAME = "login_name"
 CONF_PASSWORD = "password"
 CONF_RECOVERY_CODE = "recovery_code"
 CONF_TOTP_CODE = "totp_code"
+CONF_USER_ID = "user_id"
 CONF_RULES = "rules"
 
 # Rule fields

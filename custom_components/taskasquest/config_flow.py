@@ -13,11 +13,13 @@ from homeassistant.helpers import selector
 from .const import (
     CONDITIONS,
     CONF_APP_URL,
+    CONF_AUTH_TOKEN,
     CONF_LOGIN_NAME,
     CONF_PASSWORD,
     CONF_RECOVERY_CODE,
     CONF_RULES,
     CONF_TOTP_CODE,
+    CONF_USER_ID,
     DEFAULT_APP_URL,
     DEFAULT_COOLDOWN,
     DIFFICULTIES,
@@ -45,6 +47,65 @@ class TaskAsQuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Initialize the config flow."""
         self._login_data: dict[str, Any] = {}
         self._client: TaskAsQuestClient | None = None
+        self._reauth_entry: config_entries.ConfigEntry | None = None
+
+    async def async_step_reauth(
+        self,
+        entry_data: dict[str, Any],
+    ) -> config_entries.ConfigFlowResult:
+        """Start reauthentication while preserving rules and settings."""
+        self._reauth_entry = self.hass.config_entries.async_get_entry(
+            self.context["entry_id"]
+        )
+        self._login_data = {
+            CONF_APP_URL: entry_data.get(CONF_APP_URL, DEFAULT_APP_URL),
+            CONF_LOGIN_NAME: entry_data.get(CONF_LOGIN_NAME, ""),
+            CONF_PASSWORD: entry_data.get(CONF_PASSWORD, ""),
+            CONF_RECOVERY_CODE: entry_data.get(CONF_RECOVERY_CODE, ""),
+        }
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> config_entries.ConfigFlowResult:
+        """Collect current credentials for reauthentication."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            self._login_data.update(user_input)
+            client = TaskAsQuestClient(self._login_data[CONF_APP_URL])
+            success, err_msg = await client.authenticate(
+                self._login_data[CONF_LOGIN_NAME],
+                self._login_data[CONF_PASSWORD],
+            )
+            if success:
+                self._client = client
+                if client.protection_version == 1:
+                    return await self.async_step_recovery()
+                return await self._async_create_final_entry()
+            if err_msg == "totp_required":
+                await client.close()
+                return await self.async_step_totp()
+            errors["base"] = err_msg or "auth_failed"
+            await client.close()
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_LOGIN_NAME,
+                        default=self._login_data.get(CONF_LOGIN_NAME, ""),
+                    ): str,
+                    vol.Required(CONF_PASSWORD): selector.TextSelector(
+                        selector.TextSelectorConfig(
+                            type=selector.TextSelectorType.PASSWORD
+                        )
+                    ),
+                }
+            ),
+            errors=errors,
+        )
 
     async def async_step_user(
         self,
@@ -157,19 +218,28 @@ class TaskAsQuestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def _async_create_final_entry(self) -> config_entries.ConfigFlowResult:
         """Finalize the creation of the config entry."""
         await self.async_set_unique_id(self._client.user_id)
-        self._abort_if_unique_id_configured()
+        if self._reauth_entry is None:
+            self._abort_if_unique_id_configured()
         
         entry_data = dict(self._login_data)
         entry_data.pop(CONF_TOTP_CODE, None)
+        entry_data[CONF_AUTH_TOKEN] = self._client.token
+        entry_data[CONF_USER_ID] = self._client.user_id
         
         user_id = self._client.user_id
         await self._client.close()
         
+        if self._reauth_entry is not None:
+            return self.async_update_reload_and_abort(
+                self._reauth_entry,
+                data={**self._reauth_entry.data, **entry_data},
+            )
+
         return self.async_create_entry(
             title="Task as Quest",
             data={
                 **entry_data,
-                "user_id": user_id,
+                CONF_USER_ID: user_id,
             },
             options={CONF_RULES: []},
         )

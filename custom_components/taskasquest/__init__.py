@@ -6,14 +6,17 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import config_validation as cv
 
 from .const import (
     CONF_APP_URL,
+    CONF_AUTH_TOKEN,
     CONF_PASSWORD,
     CONF_LOGIN_NAME,
     CONF_RECOVERY_CODE,
     CONF_RULES,
+    CONF_USER_ID,
     DEFAULT_APP_URL,
     DOMAIN,
 )
@@ -40,13 +43,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
 
     client = TaskAsQuestClient(entry.data.get(CONF_APP_URL, DEFAULT_APP_URL))
-    login_name = entry.data.get(CONF_LOGIN_NAME) or entry.data.get("email", "")
-    authenticated, _ = await client.authenticate(login_name, entry.data[CONF_PASSWORD])
+    token = entry.data.get(CONF_AUTH_TOKEN, "")
+    user_id = entry.data.get(CONF_USER_ID, "")
+    authenticated = False
+    if token and user_id:
+        authenticated = await client.authenticate_with_token(token, user_id)
 
     if not authenticated:
-        _LOGGER.error("Task as Quest: Authentifizierung fehlgeschlagen")
+        login_name = entry.data.get(CONF_LOGIN_NAME, "")
+        authenticated, _ = await client.authenticate(login_name, entry.data[CONF_PASSWORD])
+
+    if not authenticated:
         await client.close()
-        return False
+        raise ConfigEntryAuthFailed(
+            "Task as Quest session expired; reauthentication required"
+        )
+
+    hass.config_entries.async_update_entry(
+        entry,
+        data={
+            **entry.data,
+            CONF_AUTH_TOKEN: client.token,
+            CONF_USER_ID: client.user_id,
+        },
+    )
 
     if not client.unlock_protected_fields(entry.data.get(CONF_RECOVERY_CODE, "")):
         _LOGGER.error("Task as Quest: Verschluesselungs-Code fehlt oder ist ungueltig")
