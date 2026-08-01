@@ -1,98 +1,111 @@
 """Sensor platform for Task as Quest."""
 
+from __future__ import annotations
+
+from dataclasses import dataclass
 from typing import Any
 
-from homeassistant.components.sensor import SensorEntity
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.components.sensor import (
+    SensorEntity,
+    SensorEntityDescription,
+    SensorStateClass,
+)
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from . import TaskAsQuestConfigEntry
 from .const import DOMAIN
 from .coordinator import TaskAsQuestCoordinator
 
 
+@dataclass(frozen=True, kw_only=True)
+class TaskAsQuestSensorDescription(SensorEntityDescription):
+    """Describe a Task as Quest sensor."""
+
+    value_key: str
+
+
+SENSOR_DESCRIPTIONS = (
+    TaskAsQuestSensorDescription(
+        key="open_tasks",
+        translation_key="open_tasks",
+        icon="mdi:sword-cross",
+        native_unit_of_measurement="quests",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_key="open_task_count",
+    ),
+    TaskAsQuestSensorDescription(
+        key="tasks_created",
+        translation_key="tasks_created",
+        icon="mdi:creation",
+        native_unit_of_measurement="quests",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        value_key="tasks_created_total",
+    ),
+    TaskAsQuestSensorDescription(
+        key="active_rules",
+        translation_key="active_rules",
+        icon="mdi:cog",
+        native_unit_of_measurement="rules",
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_key="rules_active",
+    ),
+)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: TaskAsQuestConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up sensors from config entry."""
-    coordinator: TaskAsQuestCoordinator = hass.data[DOMAIN][entry.entry_id]
+    """Set up Task as Quest sensors from a config entry."""
     async_add_entities(
-        [
-            OpenTasksSensor(coordinator, entry),
-            TasksCreatedSensor(coordinator, entry),
-            ActiveRulesSensor(coordinator, entry),
-        ]
+        TaskAsQuestSensor(entry.runtime_data, entry, description)
+        for description in SENSOR_DESCRIPTIONS
     )
 
 
-class TaskAsQuestEntity(CoordinatorEntity[TaskAsQuestCoordinator]):
-    """Base entity for Task as Quest."""
+class TaskAsQuestSensor(CoordinatorEntity[TaskAsQuestCoordinator], SensorEntity):
+    """A coordinator-backed Task as Quest sensor."""
 
     _attr_has_entity_name = True
+    entity_description: TaskAsQuestSensorDescription
 
-    @property
-    def device_info(self) -> dict[str, Any]:
-        """Return device information."""
-        return {
-            "identifiers": {(DOMAIN, self.coordinator.config_entry.entry_id)},
-            "name": "Task as Quest",
-            "manufacturer": "Marco Hildebrandt",
-            "model": "RPG Todo Integration",
-        }
-
-
-class OpenTasksSensor(TaskAsQuestEntity, SensorEntity):
-    """Number of open tasks."""
-
-    _attr_state_class = "measurement"
-
-    def __init__(self, coordinator: TaskAsQuestCoordinator, entry: ConfigEntry) -> None:
+    def __init__(
+        self,
+        coordinator: TaskAsQuestCoordinator,
+        entry: TaskAsQuestConfigEntry,
+        description: TaskAsQuestSensorDescription,
+    ) -> None:
+        """Initialize the sensor while preserving existing unique IDs."""
         super().__init__(coordinator)
-        self._attr_unique_id = f"{entry.entry_id}_open_tasks"
-        self._attr_name = "Offene Quests"
-        self._attr_icon = "mdi:sword-cross"
-        self._attr_native_unit_of_measurement = "Quests"
+        self.entity_description = description
+        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        self._entry = entry
 
     @property
     def native_value(self) -> int:
-        return self.coordinator.open_task_count
-
-
-class TasksCreatedSensor(TaskAsQuestEntity, SensorEntity):
-    """Total tasks created by automation."""
-
-    def __init__(self, coordinator: TaskAsQuestCoordinator, entry: ConfigEntry) -> None:
-        super().__init__(coordinator)
-        self._attr_unique_id = f"{entry.entry_id}_tasks_created"
-        self._attr_name = "Erstellte Quests"
-        self._attr_icon = "mdi:creation"
-        self._attr_native_unit_of_measurement = "Quests"
+        """Return the current in-memory coordinator value."""
+        return int((self.coordinator.data or {}).get(self.entity_description.value_key, 0))
 
     @property
-    def native_value(self) -> int:
-        return self.coordinator.tasks_created_total
-
-    @property
-    def extra_state_attributes(self) -> dict:
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Expose the last created task on the creation counter."""
+        if self.entity_description.key != "tasks_created":
+            return None
         return {"last_task": self.coordinator.last_task_created}
 
-
-class ActiveRulesSensor(TaskAsQuestEntity, SensorEntity):
-    """Number of active rules."""
-
-    _attr_state_class = "measurement"
-
-    def __init__(self, coordinator: TaskAsQuestCoordinator, entry: ConfigEntry) -> None:
-        super().__init__(coordinator)
-        self._attr_unique_id = f"{entry.entry_id}_active_rules"
-        self._attr_name = "Aktive Regeln"
-        self._attr_icon = "mdi:cog"
-        self._attr_native_unit_of_measurement = "Regeln"
-
     @property
-    def native_value(self) -> int:
-        data = self.coordinator.data or {}
-        return data.get("rules_active", 0)
+    def device_info(self) -> DeviceInfo:
+        """Group integration entities under the account service device."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._entry.entry_id)},
+            name="Task as Quest",
+            manufacturer="Task as Quest",
+            model="Cloud service",
+            configuration_url=self.coordinator.client.base_url,
+        )

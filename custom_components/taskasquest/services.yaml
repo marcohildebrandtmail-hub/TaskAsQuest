@@ -1,41 +1,86 @@
 create_quest:
-  name: Create Quest
-  description: Creates a new quest in Task as Quest.
+  name: Create quest
+  description: Creates a quest in Task as Quest and returns its id.
   fields:
+    config_entry_id:
+      name: Account
+      description: Required only when multiple Task as Quest accounts are configured.
+      required: false
+      selector:
+        config_entry:
+          integration: taskasquest
     title:
       name: Title
       description: The title of the quest.
       required: true
-      example: "Water the plants"
+      example: Water the plants
       selector:
         text:
     difficulty:
       name: Difficulty
       description: The difficulty of the quest.
       required: false
-      default: "medium"
+      default: medium
       selector:
         select:
+          translation_key: difficulty
           options:
-            - label: "Easy"
-              value: "easy"
-            - label: "Medium"
-              value: "medium"
-            - label: "Hard"
-              value: "hard"
-            - label: "Epic"
-              value: "epic"
+            - easy
+            - medium
+            - hard
+            - epic
     description:
       name: Description
-      description: A longer description of the quest.
+      description: Additional details for the quest.
       required: false
-      example: "Water the plants in the living room."
       selector:
         text:
+          multiline: true
     due_date:
-      name: Due Date
-      description: When is this quest due?
+      name: Due date
+      description: An ISO 8601 date or date-time.
       required: false
-      example: "2026-06-01"
+      example: "2026-07-14T21:59:00Z"
       selector:
         text:
+    assignees:
+      name: Assignees
+      description: Optional Task as Quest account ids to assign.
+      required: false
+      default: []
+      selector:
+        text:
+          multiple: true
+    notify_app:
+      name: Send notification
+      description: Notify the account owner in the Task as Quest app.
+      required: false
+      default: false
+      selector:
+        boolean:
+
+add_rules:
+  name: Import rules
+  description: Adds multiple rules while skipping exact duplicates.
+  fields:
+    config_entry_id:
+      name: Account
+      description: Required only when multiple Task as Quest accounts are configured.
+      required: false
+      selector:
+        config_entry:
+          integration: taskasquest
+    rules:
+      name: Rules
+      description: A list of rule objects. See the integration documentation for the schema.
+      required: true
+      example:
+        - entity_id: sensor.plant_moisture
+          condition: below
+          value: "45"
+          task_title: Water the plant
+          difficulty: easy
+          trigger_mode: edge
+          cooldown: 1440
+      selector:
+        object:

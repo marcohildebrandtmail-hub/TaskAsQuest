@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import os
 from dataclasses import dataclass
 from typing import Any
@@ -87,7 +88,7 @@ class ProtectedFields:
             priv_der = _aes_gcm_decrypt(master_key, priv_wrapped)
             private_key = serialization.load_der_private_key(priv_der, password=None)
             public_key = serialization.load_der_public_key(_b64decode(pub_key))
-        except (ValueError, InvalidTag) as err:
+        except (TypeError, ValueError, InvalidTag, binascii.Error, UnicodeError) as err:
             raise ProtectedFieldsError("Could not unlock protected fields") from err
 
         if not isinstance(private_key, ec.EllipticCurvePrivateKey) or not isinstance(
@@ -106,11 +107,35 @@ class ProtectedFields:
         for field in ENC_FIELDS:
             value = plain.get(field)
             payload[f"{field}_enc"] = (
-                None if value is None or value == "" else _aes_gcm_encrypt(quest_key, value.encode())
+                None
+                if value is None or value == ""
+                else _aes_gcm_encrypt(quest_key, value.encode())
             )
 
         payload["quest_key_wrapped"] = self.wrap_task_key(quest_key, self.public_key)
         return payload, quest_key
+
+    def encrypt_task_update(
+        self,
+        record: dict[str, Any],
+        plain: dict[str, str | None],
+    ) -> dict[str, Any]:
+        """Encrypt changed protected fields using an existing task key."""
+        wrapped = record.get("quest_key_wrapped")
+        if not wrapped:
+            raise ProtectedFieldsError("Task does not contain a wrapped key")
+
+        quest_key = self.unwrap_task_key(wrapped)
+        payload: dict[str, Any] = {"crypto_version": 1}
+        for field, value in plain.items():
+            if field not in ENC_FIELDS:
+                continue
+            payload[f"{field}_enc"] = (
+                None
+                if value is None or value == ""
+                else _aes_gcm_encrypt(quest_key, value.encode())
+            )
+        return payload
 
     def decrypt_task_read(self, record: dict[str, Any]) -> dict[str, Any]:
         """Decrypt protected task fields for display."""
@@ -146,7 +171,13 @@ class ProtectedFields:
                 continue
             try:
                 out[field] = _aes_gcm_decrypt(quest_key, encrypted).decode()
-            except (UnicodeDecodeError, ValueError, InvalidTag):
+            except (
+                UnicodeDecodeError,
+                ValueError,
+                InvalidTag,
+                binascii.Error,
+                ProtectedFieldsError,
+            ):
                 out[field] = "(Feld-Entschluesselung fehlgeschlagen)"
         return out
 
@@ -175,12 +206,15 @@ class ProtectedFields:
             if not isinstance(recipient_public_key, ec.EllipticCurvePublicKey):
                 raise ProtectedFieldsError("Unsupported recipient key type")
             return self.wrap_task_key(quest_key, recipient_public_key)
-        except Exception as err:
+        except (ValueError, TypeError, binascii.Error, ProtectedFieldsError) as err:
             raise ProtectedFieldsError("Could not wrap task key for recipient") from err
 
     def unwrap_task_key(self, wrapped_b64: str) -> bytes:
         """Unwrap a task key with this account's private key."""
-        packed = _b64decode(wrapped_b64)
+        try:
+            packed = _b64decode(wrapped_b64)
+        except (ValueError, binascii.Error, UnicodeError) as err:
+            raise ProtectedFieldsError("Invalid wrapped key") from err
         if len(packed) < 2:
             raise ProtectedFieldsError("Invalid wrapped key")
 
@@ -190,12 +224,15 @@ class ProtectedFields:
         if len(packed) <= iv_end:
             raise ProtectedFieldsError("Invalid wrapped key")
 
-        ephemeral_public = serialization.load_der_public_key(packed[2:pub_end])
+        try:
+            ephemeral_public = serialization.load_der_public_key(packed[2:pub_end])
+        except ValueError as err:
+            raise ProtectedFieldsError("Invalid ephemeral public key") from err
         if not isinstance(ephemeral_public, ec.EllipticCurvePublicKey):
             raise ProtectedFieldsError("Unsupported ephemeral key type")
 
-        wrap_key = _derive_wrap_key(self.private_key, ephemeral_public)
         try:
+            wrap_key = _derive_wrap_key(self.private_key, ephemeral_public)
             return AESGCM(wrap_key).decrypt(packed[pub_end:iv_end], packed[iv_end:], None)
-        except InvalidTag as err:
+        except (InvalidTag, ValueError) as err:
             raise ProtectedFieldsError("Could not unwrap key") from err

@@ -1,89 +1,38 @@
 {
   "config": {
     "step": {
-      "user": {
-        "title": "Task as Quest - Login",
-        "description": "Verbinde Home Assistant mit deinem Task as Quest Account.",
-        "data": {
-          "app_url": "Server-Adresse",
-          "login_name": "Login-Name (Name#0001)",
-          "password": "Passwort"
-        }
-      },
-      "reauth_confirm": {
-        "title": "Task as Quest erneut anmelden",
-        "description": "Die Sitzung ist abgelaufen. Melde dich erneut an; vorhandene Regeln bleiben erhalten.",
-        "data": {
-          "login_name": "Login-Name",
-          "password": "Passwort"
-        }
-      },
-      "totp": {
-        "title": "2-Faktor-Authentifizierung (2FA)",
-        "description": "Falls du 2FA in der App aktiviert hast, gib den aktuellen Code hier ein. Wenn nicht, lass das Feld einfach leer und klicke auf Absenden.",
-        "data": {
-          "totp_code": "2FA-Code (optional)"
-        }
-      }
+      "user": { "title": "Task as Quest verbinden", "description": "Verbinde Home Assistant mit deinem Task-as-Quest-Konto.", "data": { "app_url": "Server-Adresse", "login_name": "Login-Name (Name#0001)", "password": "Passwort" } },
+      "reauth_confirm": { "title": "Erneut anmelden", "description": "Die Sitzung ist abgelaufen. Vorhandene Regeln bleiben erhalten.", "data": { "login_name": "Login-Name", "password": "Passwort" } },
+      "reconfigure": { "title": "Task as Quest neu konfigurieren", "description": "Ändere den Server oder die Zugangsdaten. Vorhandene Regeln bleiben erhalten.", "data": { "app_url": "Server-Adresse", "login_name": "Login-Name (Name#0001)", "password": "Passwort" } },
+      "totp": { "title": "Zwei-Faktor-Authentifizierung", "description": "Gib den aktuellen Code aus deiner Authenticator-App ein.", "data": { "totp_code": "2FA-Code" } }
     },
-    "error": {
-      "auth_failed": "Authentifizierung fehlgeschlagen. Pruefe Login-Name, Passwort und ggf. 2FA-Code.",
-      "cannot_connect": "Verbindung zum Server fehlgeschlagen. Ist der Server erreichbar?",
-      "encryption_unlock_failed": "Die Verschluesselung konnte mit dem Account-Passwort nicht entsperrt werden."
-    }
+    "error": { "auth_failed": "Die Anmeldung ist fehlgeschlagen. Prüfe Login-Name, Passwort und 2FA-Code.", "invalid_totp": "Der 2FA-Code ist ungültig oder abgelaufen.", "cannot_connect": "Der Task-as-Quest-Server ist momentan nicht erreichbar.", "encryption_unlock_failed": "Die Verschlüsselung konnte mit diesem Kontopasswort nicht entsperrt werden.", "invalid_url": "Gib eine gültige HTTP- oder HTTPS-Server-Adresse ein.", "unknown": "Ein unerwarteter Fehler ist aufgetreten. Prüfe die Home-Assistant-Protokolle." },
+    "abort": { "unknown": "Das Anmeldeergebnis war unvollständig. Versuche es erneut.", "unique_id_mismatch": "Melde dich mit demselben Task-as-Quest-Konto an, das ursprünglich eingerichtet wurde." }
   },
   "options": {
     "step": {
-      "init": {
-        "title": "Task as Quest - Regeln",
-        "menu_options": {
-          "manage_rules": "Regeln verwalten / bearbeiten",
-          "add_rule": "Neue Regel hinzufuegen"
-        }
-      },
-      "add_rule": {
-        "title": "Automatisierung hinzufuegen (Schritt 1)",
-        "description": "Waehle zuerst die Entitaet aus, die ueberwacht werden soll.",
-        "data": {
-          "entity_id": "Entitaet"
-        }
-      },
-      "add_rule_details": {
-        "title": "Automatisierung hinzufuegen (Schritt 2)",
-        "description": "Wenn die Entitaet die Bedingung erfuellt, wird eine Quest erstellt.",
-        "data": {
-          "condition": "Bedingung",
-          "value": "Schwellenwert",
-          "task_title": "Quest-Titel",
-          "difficulty": "Schwierigkeit",
-          "cooldown": "Cooldown (Minuten)",
-          "assignees": "Gefaehrten zuweisen (optional)",
-          "due_date_offset": "Faelligkeit",
-          "notify_app": "App-Benachrichtigung senden"
-        }
-      },
-      "manage_rules": {
-        "title": "Regeln verwalten",
-        "description": "Waehle eine Regel aus der Liste aus, um sie zu bearbeiten oder zu loeschen.",
-        "data": {
-          "rule_index": "Bestehende Regeln"
-        }
-      },
-      "edit_rule": {
-        "title": "Regel bearbeiten",
-        "description": "Passe die Parameter der Regel an oder loesche sie komplett.",
-        "data": {
-          "condition": "Bedingung",
-          "value": "Schwellenwert",
-          "task_title": "Quest-Titel",
-          "difficulty": "Schwierigkeit",
-          "cooldown": "Cooldown (Minuten)",
-          "assignees": "Gefaehrten zuweisen (optional)",
-          "due_date_offset": "Faelligkeit",
-          "notify_app": "App-Benachrichtigung senden",
-          "delete_rule": "Diese Regel loeschen"
-        }
-      }
-    }
+      "init": { "title": "Task-as-Quest-Regeln", "menu_options": { "manage_rules": "Regeln verwalten", "add_rule": "Regel hinzufügen" } },
+      "add_rule": { "title": "Regel hinzufügen: Entität", "description": "Wähle die Home-Assistant-Entität aus, die überwacht werden soll.", "data": { "entity_id": "Entität" } },
+      "add_rule_details": { "title": "Regel hinzufügen: Details", "description": "Eine Quest wird erstellt, sobald diese Bedingung ausgelöst wird.", "data": { "condition": "Bedingung", "value": "Wert oder Schwelle", "task_title": "Quest-Titel", "difficulty": "Schwierigkeit", "trigger_mode": "Auslöseverhalten", "cooldown": "Cooldown in Minuten", "assignees": "Gefährten zuweisen", "due_date_offset": "Fälligkeit", "notify_app": "App-Benachrichtigung senden", "enabled": "Regel aktiviert" } },
+      "manage_rules": { "title": "Regeln verwalten", "description": "Wähle eine Regel zum Bearbeiten oder Löschen aus.", "data": { "rule_index": "Regel" } },
+      "edit_rule": { "title": "Regel bearbeiten", "description": "Aktualisiere die Regel oder lösche sie dauerhaft.", "data": { "condition": "Bedingung", "value": "Wert oder Schwelle", "task_title": "Quest-Titel", "difficulty": "Schwierigkeit", "trigger_mode": "Auslöseverhalten", "cooldown": "Cooldown in Minuten", "assignees": "Gefährten zuweisen", "due_date_offset": "Fälligkeit", "notify_app": "App-Benachrichtigung senden", "enabled": "Regel aktiviert", "delete_rule": "Diese Regel löschen" } }
+    },
+    "error": { "cannot_load_companions": "Gefährten konnten nicht geladen werden. Du kannst die Regel trotzdem speichern." }
+  },
+  "selector": {
+    "condition": { "options": { "below": "Kleiner als", "above": "Größer als", "equals": "Gleich", "not_equals": "Ungleich" } },
+    "difficulty": { "options": { "easy": "Leicht", "medium": "Mittel", "hard": "Schwer", "epic": "Episch" } },
+    "trigger_mode": { "options": { "edge": "Nur wenn die Bedingung neu wahr wird", "level": "Wiederholen, solange die Bedingung wahr bleibt" } }
+  },
+  "entity": { "sensor": { "open_tasks": { "name": "Offene Quests" }, "tasks_created": { "name": "Erstellte Quests" }, "active_rules": { "name": "Aktive Regeln" } }, "todo": { "quests": { "name": "Quests" } } },
+  "exceptions": {
+    "no_loaded_account": { "message": "Es wurde kein geladenes Task-as-Quest-Konto gefunden." },
+    "multiple_loaded_accounts": { "message": "Mehrere Task-as-Quest-Konten sind geladen. Wähle in der Aktion ein Konto aus." },
+    "authentication_expired": { "message": "Die Task-as-Quest-Anmeldung ist abgelaufen. Melde die Integration erneut an." },
+    "quest_title_required": { "message": "Ein Quest-Titel ist erforderlich." },
+    "quest_fields_required": { "message": "Quest-ID, Titel und Status sind erforderlich." },
+    "create_quest_failed": { "message": "Die Quest konnte nicht erstellt werden: {error}" },
+    "update_quest_failed": { "message": "Die Quest konnte nicht aktualisiert werden: {error}" },
+    "delete_quests_failed": { "message": "Nicht alle Quests konnten gelöscht werden: {error}" }
   }
 }

@@ -12,6 +12,9 @@
 !.github/
 !.github/**
 !*.png
+!pyproject.toml
+!tests/
+!tests/**
 
 # Ignore python cache inside custom_components
 __pycache__/

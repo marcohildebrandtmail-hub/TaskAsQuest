@@ -2,88 +2,155 @@
   "config": {
     "step": {
       "user": {
-        "title": "Task as Quest - Login",
-        "description": "Verbinde Home Assistant mit deinem Task as Quest Account.",
+        "title": "Connect Task as Quest",
+        "description": "Connect Home Assistant to your Task as Quest account.",
         "data": {
-          "app_url": "Server-Adresse",
-          "login_name": "Login-Name (Name#0001)",
-          "password": "Passwort"
+          "app_url": "Server address",
+          "login_name": "Login name (Name#0001)",
+          "password": "Password"
         }
       },
       "reauth_confirm": {
-        "title": "Task as Quest erneut anmelden",
-        "description": "Die Sitzung ist abgelaufen. Melde dich erneut an; vorhandene Regeln bleiben erhalten.",
+        "title": "Sign in again",
+        "description": "The session expired. Existing rules will be retained.",
         "data": {
-          "login_name": "Login-Name",
-          "password": "Passwort"
+          "login_name": "Login name",
+          "password": "Password"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Task as Quest",
+        "description": "Change the server or account credentials. Existing rules will be retained.",
+        "data": {
+          "app_url": "Server address",
+          "login_name": "Login name (Name#0001)",
+          "password": "Password"
         }
       },
       "totp": {
-        "title": "2-Faktor-Authentifizierung (2FA)",
-        "description": "Dein Account ist durch 2FA geschuetzt. Bitte gib den aktuellen Code ein.",
+        "title": "Two-factor authentication",
+        "description": "Enter the current code from your authenticator app.",
         "data": {
-          "totp_code": "2FA-Code"
+          "totp_code": "2FA code"
         }
       }
     },
     "error": {
-      "auth_failed": "Authentifizierung fehlgeschlagen. Pruefe Login-Name, Passwort und ggf. 2FA-Code.",
-      "cannot_connect": "Verbindung zum Server fehlgeschlagen. Ist der Server erreichbar?",
-      "encryption_unlock_failed": "Die Verschluesselung konnte mit dem Account-Passwort nicht entsperrt werden."
+      "auth_failed": "Authentication failed. Check the login name, password, and 2FA code.",
+      "invalid_totp": "The 2FA code is invalid or expired.",
+      "cannot_connect": "The Task as Quest server is currently unavailable.",
+      "encryption_unlock_failed": "Encryption could not be unlocked with this account password.",
+      "invalid_url": "Enter a valid HTTP or HTTPS server address.",
+      "unknown": "An unexpected error occurred. Check the Home Assistant logs."
+    },
+    "abort": {
+      "unknown": "The login result was incomplete. Try again.",
+      "unique_id_mismatch": "Sign in with the same Task as Quest account that was originally configured."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Task as Quest - Regeln",
+        "title": "Task as Quest rules",
         "menu_options": {
-          "manage_rules": "Regeln verwalten / bearbeiten",
-          "add_rule": "Neue Regel hinzufuegen"
+          "manage_rules": "Manage rules",
+          "add_rule": "Add rule"
         }
       },
       "add_rule": {
-        "title": "Automatisierung hinzufuegen (Schritt 1)",
-        "description": "Waehle zuerst die Entitaet aus, die ueberwacht werden soll.",
+        "title": "Add rule: entity",
+        "description": "Select the Home Assistant entity to monitor.",
         "data": {
-          "entity_id": "Entitaet"
+          "entity_id": "Entity"
         }
       },
       "add_rule_details": {
-        "title": "Automatisierung hinzufuegen (Schritt 2)",
-        "description": "Wenn die Entitaet die Bedingung erfuellt, wird eine Quest erstellt.",
+        "title": "Add rule: details",
+        "description": "A quest is created when this condition is triggered.",
         "data": {
-          "condition": "Bedingung",
-          "value": "Schwellenwert",
-          "task_title": "Quest-Titel",
-          "difficulty": "Schwierigkeit",
-          "cooldown": "Cooldown (Minuten)",
-          "assignees": "Gefaehrten zuweisen (optional)",
-          "due_date_offset": "Faelligkeit",
-          "notify_app": "App-Benachrichtigung senden"
+          "condition": "Condition",
+          "value": "Value or threshold",
+          "task_title": "Quest title",
+          "difficulty": "Difficulty",
+          "trigger_mode": "Trigger behavior",
+          "cooldown": "Cooldown in minutes",
+          "assignees": "Assign companions",
+          "due_date_offset": "Due date",
+          "notify_app": "Send app notification",
+          "enabled": "Rule enabled"
         }
       },
       "manage_rules": {
-        "title": "Regeln verwalten",
-        "description": "Waehle eine Regel aus der Liste aus, um sie zu bearbeiten oder zu loeschen.",
+        "title": "Manage rules",
+        "description": "Select a rule to edit or delete.",
         "data": {
-          "rule_index": "Bestehende Regeln"
+          "rule_index": "Rule"
         }
       },
       "edit_rule": {
-        "title": "Regel bearbeiten",
-        "description": "Passe die Parameter der Regel an oder loesche sie komplett.",
+        "title": "Edit rule",
+        "description": "Update the rule or delete it permanently.",
         "data": {
-          "condition": "Bedingung",
-          "value": "Schwellenwert",
-          "task_title": "Quest-Titel",
-          "difficulty": "Schwierigkeit",
-          "cooldown": "Cooldown (Minuten)",
-          "assignees": "Gefaehrten zuweisen (optional)",
-          "due_date_offset": "Faelligkeit",
-          "notify_app": "App-Benachrichtigung senden",
-          "delete_rule": "Diese Regel loeschen"
+          "condition": "Condition",
+          "value": "Value or threshold",
+          "task_title": "Quest title",
+          "difficulty": "Difficulty",
+          "trigger_mode": "Trigger behavior",
+          "cooldown": "Cooldown in minutes",
+          "assignees": "Assign companions",
+          "due_date_offset": "Due date",
+          "notify_app": "Send app notification",
+          "enabled": "Rule enabled",
+          "delete_rule": "Delete this rule"
         }
       }
+    },
+    "error": {
+      "cannot_load_companions": "Companions could not be loaded. You can still save the rule."
     }
+  },
+  "selector": {
+    "condition": {
+      "options": {
+        "below": "Below",
+        "above": "Above",
+        "equals": "Equals",
+        "not_equals": "Does not equal"
+      }
+    },
+    "difficulty": {
+      "options": {
+        "easy": "Easy",
+        "medium": "Medium",
+        "hard": "Hard",
+        "epic": "Epic"
+      }
+    },
+    "trigger_mode": {
+      "options": {
+        "edge": "Only when the condition becomes true",
+        "level": "Repeat while the condition remains true"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "open_tasks": { "name": "Open quests" },
+      "tasks_created": { "name": "Created quests" },
+      "active_rules": { "name": "Active rules" }
+    },
+    "todo": {
+      "quests": { "name": "Quests" }
+    }
+  },
+  "exceptions": {
+    "no_loaded_account": { "message": "No loaded Task as Quest account was found." },
+    "multiple_loaded_accounts": { "message": "More than one Task as Quest account is loaded. Select an account in the action." },
+    "authentication_expired": { "message": "Task as Quest authentication expired. Reauthenticate the integration." },
+    "quest_title_required": { "message": "A quest title is required." },
+    "quest_fields_required": { "message": "Quest id, title, and status are required." },
+    "create_quest_failed": { "message": "Could not create the quest: {error}" },
+    "update_quest_failed": { "message": "Could not update the quest: {error}" },
+    "delete_quests_failed": { "message": "Could not delete all quests: {error}" }
   }
 }
