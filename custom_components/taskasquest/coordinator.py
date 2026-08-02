@@ -6,13 +6,14 @@ import asyncio
 import logging
 import time
 from collections.abc import Callable
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
@@ -33,6 +34,7 @@ from .const import (
     RULE_NOTIFY_APP,
     RULE_TASK_TITLE,
     RULE_TRIGGER_MODE,
+    STARTUP_RULE_GRACE,
     STORAGE_KEY_PREFIX,
     STORAGE_VERSION,
 )
@@ -73,6 +75,8 @@ class TaskAsQuestCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.last_task_created: str | None = None
         self._last_created_by_rule: dict[str, float] = {}
         self._rule_unsubscribe: Callable[[], None] | None = None
+        self._startup_unsubscribe: Callable[[], None] | None = None
+        self._rules_armed = False
         self._rule_lock = asyncio.Lock()
         self._store: Store[dict[str, Any]] = Store(
             hass,
@@ -97,12 +101,44 @@ class TaskAsQuestCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @callback
     def async_start(self) -> None:
-        """Subscribe to entity changes after setup completed."""
+        """Arm rules after Home Assistant and its devices have settled."""
+        if self.hass.is_running:
+            self._async_activate_rules()
+            return
+        self._startup_unsubscribe = self.hass.bus.async_listen_once(
+            EVENT_HOMEASSISTANT_STARTED,
+            self._async_schedule_rule_activation,
+        )
+
+    @callback
+    def _async_schedule_rule_activation(self, _event: Event) -> None:
+        """Wait out transient device states reported during startup."""
+        self._startup_unsubscribe = async_call_later(
+            self.hass,
+            STARTUP_RULE_GRACE.total_seconds(),
+            self._async_activate_rules,
+        )
+
+    @callback
+    def _async_activate_rules(self, _now: datetime | None = None) -> None:
+        """Enable rules and evaluate the settled state once."""
+        if self._rules_armed:
+            return
+        self._startup_unsubscribe = None
+        self._rules_armed = True
         self._subscribe_to_rule_entities()
+        self.config_entry.async_create_background_task(
+            self.hass,
+            self.async_request_refresh(),
+            f"{DOMAIN} startup rule evaluation",
+        )
 
     @callback
     def async_shutdown(self) -> None:
         """Remove rule event subscriptions."""
+        if self._startup_unsubscribe:
+            self._startup_unsubscribe()
+            self._startup_unsubscribe = None
         if self._rule_unsubscribe:
             self._rule_unsubscribe()
             self._rule_unsubscribe = None
@@ -111,7 +147,8 @@ class TaskAsQuestCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def update_rules(self, rules: list[dict[str, Any]]) -> None:
         """Replace automation rules and update state subscriptions."""
         self.rules = rules
-        self._subscribe_to_rule_entities()
+        if self._rules_armed:
+            self._subscribe_to_rule_entities()
 
     @callback
     def async_publish_rule_update(self) -> None:
@@ -143,6 +180,8 @@ class TaskAsQuestCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     @callback
     def _handle_state_change(self, event: Event) -> None:
         """Schedule rule processing without blocking the event bus."""
+        if not self._rules_armed:
+            return
         self.config_entry.async_create_background_task(
             self.hass,
             self._async_handle_state_change(event),
@@ -150,6 +189,8 @@ class TaskAsQuestCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
     async def _async_handle_state_change(self, event: Event) -> None:
+        if not self._rules_armed:
+            return
         entity_id = event.data.get("entity_id")
         old_state = event.data.get("old_state")
         new_state = event.data.get("new_state")
@@ -200,15 +241,17 @@ class TaskAsQuestCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
 
             open_tasks = await self.client.get_open_tasks()
-            level_rules = [
-                rule
-                for rule in self.rules
-                if rule.get(RULE_ENABLED, True)
-                and rule.get(RULE_TRIGGER_MODE, "level") == "level"
-                and (state := self.hass.states.get(rule.get(RULE_ENTITY_ID, ""))) is not None
-                and rule_matches(rule, state.state)
-            ]
-            created = await self._async_evaluate_rules(level_rules, open_tasks)
+            created = 0
+            if self._rules_armed:
+                level_rules = [
+                    rule
+                    for rule in self.rules
+                    if rule.get(RULE_ENABLED, True)
+                    and rule.get(RULE_TRIGGER_MODE, "level") == "level"
+                    and (state := self.hass.states.get(rule.get(RULE_ENTITY_ID, ""))) is not None
+                    and rule_matches(rule, state.state)
+                ]
+                created = await self._async_evaluate_rules(level_rules, open_tasks)
             self.open_task_count = len(open_tasks)
             return self._coordinator_data(open_tasks, created)
         except TaskAsQuestAuthenticationError as err:
