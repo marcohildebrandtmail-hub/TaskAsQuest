@@ -57,6 +57,7 @@ from .exceptions import (
     TaskAsQuestRateLimitError,
     TaskAsQuestTotpRequiredError,
 )
+from .panel import async_register_dashboard
 from .rules import normalize_rule, rule_signature
 
 PLATFORMS = (Platform.SENSOR, Platform.TODO)
@@ -132,6 +133,7 @@ def _loaded_coordinator(hass: HomeAssistant, config_entry_id: str | None) -> Tas
 
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     """Register Task as Quest actions once for the integration domain."""
+    await async_register_dashboard(hass)
 
     async def handle_create_quest(call: ServiceCall) -> dict[str, Any]:
         coordinator = _loaded_coordinator(
