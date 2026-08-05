@@ -121,7 +121,10 @@ async def async_register_dashboard(hass: HomeAssistant) -> None:
     from homeassistant.components import frontend
     from homeassistant.components.http import StaticPathConfig
 
-    if hass.data.get(f"{DOMAIN}_dashboard_registered"):
+    if (
+        hass.data.get(f"{DOMAIN}_dashboard_registered")
+        or "frontend" not in hass.config.components
+    ):
         return
     hass.data[f"{DOMAIN}_dashboard_registered"] = True
     static_dir = Path(__file__).parent / "frontend"
