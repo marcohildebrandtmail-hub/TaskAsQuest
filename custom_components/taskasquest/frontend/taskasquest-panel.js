@@ -44,7 +44,7 @@ class TaskAsQuestPanel extends HTMLElement {
     app.querySelector("#refresh").onclick=()=>this._reload(); app.querySelector("#add").onclick=()=>this._openEditor();
     app.querySelectorAll("[data-toggle]").forEach(b=>b.onclick=()=>this._toggle(b.dataset.entry,b.dataset.toggle,b.dataset.enabled!=="true"));
     app.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>this._openEditor(JSON.parse(decodeURIComponent(b.dataset.edit))));
-    app.querySelectorAll("[data-delete]").forEach(b=>this._delete(b.dataset.entry,b.dataset.delete));
+    app.querySelectorAll("[data-delete]").forEach(b=>b.onclick=()=>this._delete(b.dataset.entry,b.dataset.delete));
   }
 
   _rule(r) { const encoded=encodeURIComponent(JSON.stringify(r)); const on=r.enabled!==false; return `<div class="rule ${on?'':'off'}"><div><div class="title">${this._esc(r.task_title)}</div><div class="meta">${this._esc(r.entity_id)} ist ${this._condition(r)} ${this._esc(r.value)} · ${this._esc(r.difficulty)} · ${r.cooldown} Min. Cooldown</div></div><div class="actions"><button class="quiet" data-toggle="${r.id}" data-entry="${r.entry_id}" data-enabled="${on}">${on?'Aktiv':'Pausiert'}</button><button class="quiet" data-edit="${encoded}">Bearbeiten</button><button class="quiet danger" data-delete="${r.id}" data-entry="${r.entry_id}">Löschen</button></div></div>`; }
