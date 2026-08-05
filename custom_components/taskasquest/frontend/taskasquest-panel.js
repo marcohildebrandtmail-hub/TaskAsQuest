@@ -43,7 +43,7 @@ class TaskAsQuestPanel extends HTMLElement {
       <div class="section"><h2>Offene Quests</h2></div><div class="quests">${tasks.length ? tasks.map(t=>`<div class="quest"><span class="title">${this._esc(t.title || "Unbenannte Quest")}</span><span class="meta">${this._esc(t.difficulty || "mittel")}</span></div>`).join("") : '<div class="empty">Derzeit sind keine offenen Quests vorhanden.</div>'}</div>`;
     app.querySelector("#refresh").onclick=()=>this._reload(); app.querySelector("#add").onclick=()=>this._openEditor();
     app.querySelectorAll("[data-toggle]").forEach(b=>b.onclick=()=>this._toggle(b.dataset.entry,b.dataset.toggle,b.dataset.enabled!=="true"));
-    app.querySelectorAll("[data-edit]").forEach(b=>this._openEditor(JSON.parse(decodeURIComponent(b.dataset.rule))));
+    app.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>this._openEditor(JSON.parse(decodeURIComponent(b.dataset.edit))));
     app.querySelectorAll("[data-delete]").forEach(b=>this._delete(b.dataset.entry,b.dataset.delete));
   }
 
