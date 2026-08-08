@@ -1,9 +1,11 @@
 """Tests for coordinator rule processing."""
 
+from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from homeassistant.core import HomeAssistant
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
 
 from custom_components.taskasquest.const import (
     CONF_APP_URL,
@@ -88,6 +90,12 @@ async def test_level_rule_waits_for_startup_grace_before_creating_quest(
 
         coordinator._rules_armed = True
         settled = await coordinator._async_update_data()
+        
+    assert settled["tasks_created_this_update"] == 0
+    client.create_task.assert_not_awaited()
 
-    assert settled["tasks_created_this_update"] == 1
+    # Fast forward past the burst protection window
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=35))
+    await hass.async_block_till_done()
+
     client.create_task.assert_awaited_once()
