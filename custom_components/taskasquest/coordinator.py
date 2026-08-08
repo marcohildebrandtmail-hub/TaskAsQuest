@@ -23,6 +23,8 @@ from .const import (
     CONF_AUTH_TOKEN,
     CONF_USER_ID,
     DEFAULT_UPDATE_INTERVAL,
+    BURST_WINDOW_SECONDS,
+    BURST_THRESHOLD,
     DOMAIN,
     RULE_ASSIGNEES,
     RULE_COOLDOWN,
@@ -76,6 +78,8 @@ class TaskAsQuestCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._last_created_by_rule: dict[str, float] = {}
         self._rule_unsubscribe: Callable[[], None] | None = None
         self._startup_unsubscribe: Callable[[], None] | None = None
+        self._burst_timer_unsubscribe: Callable[[], None] | None = None
+        self._pending_rules: set[str] = set()
         self._rules_armed = False
         self._rule_lock = asyncio.Lock()
         self._store: Store[dict[str, Any]] = Store(
@@ -142,6 +146,9 @@ class TaskAsQuestCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._rule_unsubscribe:
             self._rule_unsubscribe()
             self._rule_unsubscribe = None
+        if self._burst_timer_unsubscribe:
+            self._burst_timer_unsubscribe()
+            self._burst_timer_unsubscribe = None
 
     @callback
     def update_rules(self, rules: list[dict[str, Any]]) -> None:
@@ -188,6 +195,67 @@ class TaskAsQuestCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             f"{DOMAIN} rule evaluation",
         )
 
+    @callback
+    def _async_queue_rules(self, rules: list[dict[str, Any]]) -> None:
+        """Queue rules for evaluation to protect against bursts."""
+        for rule in rules:
+            rule_id = rule.get(RULE_ID)
+            if rule_id:
+                self._pending_rules.add(rule_id)
+                
+        if not self._burst_timer_unsubscribe:
+            _LOGGER.debug("Starting burst protection timer for %s seconds", BURST_WINDOW_SECONDS)
+            self._burst_timer_unsubscribe = async_call_later(
+                self.hass,
+                BURST_WINDOW_SECONDS,
+                self._async_process_pending_rules,
+            )
+
+    @callback
+    def _async_process_pending_rules(self, _now: datetime | None = None) -> None:
+        """Process or cancel queued rules."""
+        self._burst_timer_unsubscribe = None
+        
+        pending_ids = self._pending_rules.copy()
+        self._pending_rules.clear()
+        
+        if not pending_ids:
+            return
+            
+        if len(pending_ids) > BURST_THRESHOLD:
+            _LOGGER.warning(
+                "Burst protection triggered: %d rules triggered within %d seconds. Canceling all to prevent quest flood.",
+                len(pending_ids),
+                BURST_WINDOW_SECONDS,
+            )
+            return
+            
+        rules_to_evaluate = [rule for rule in self.rules if rule.get(RULE_ID) in pending_ids]
+        if not rules_to_evaluate:
+            return
+            
+        self.config_entry.async_create_background_task(
+            self.hass,
+            self._async_execute_queued_rules(rules_to_evaluate),
+            f"{DOMAIN} delayed rule evaluation",
+        )
+
+    async def _async_execute_queued_rules(self, rules: list[dict[str, Any]]) -> None:
+        """Execute the rules after the burst window."""
+        if not self._rules_armed:
+            return
+            
+        try:
+            tasks = list((self.data or {}).get("open_tasks", []))
+            created = await self._async_evaluate_rules(rules, tasks)
+            if created:
+                self.open_task_count = len(tasks)
+                self.async_set_updated_data(self._coordinator_data(tasks, created))
+        except TaskAsQuestAuthenticationError:
+            self.config_entry.async_start_reauth(self.hass)
+        except TaskAsQuestError as err:
+            _LOGGER.warning("Task as Quest rule evaluation failed: %s", err)
+
     async def _async_handle_state_change(self, event: Event) -> None:
         if not self._rules_armed:
             return
@@ -212,18 +280,8 @@ class TaskAsQuestCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 continue
             matching_rules.append(rule)
 
-        if not matching_rules:
-            return
-        try:
-            tasks = list((self.data or {}).get("open_tasks", []))
-            created = await self._async_evaluate_rules(matching_rules, tasks)
-            if created:
-                self.open_task_count = len(tasks)
-                self.async_set_updated_data(self._coordinator_data(tasks, created))
-        except TaskAsQuestAuthenticationError:
-            self.config_entry.async_start_reauth(self.hass)
-        except TaskAsQuestError as err:
-            _LOGGER.warning("Task as Quest rule evaluation failed: %s", err)
+        if matching_rules:
+            self._async_queue_rules(matching_rules)
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch cloud data and process repeating level rules."""
@@ -251,7 +309,8 @@ class TaskAsQuestCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     and (state := self.hass.states.get(rule.get(RULE_ENTITY_ID, ""))) is not None
                     and rule_matches(rule, state.state)
                 ]
-                created = await self._async_evaluate_rules(level_rules, open_tasks)
+                if level_rules:
+                    self._async_queue_rules(level_rules)
             self.open_task_count = len(open_tasks)
             return self._coordinator_data(open_tasks, created)
         except TaskAsQuestAuthenticationError as err:
