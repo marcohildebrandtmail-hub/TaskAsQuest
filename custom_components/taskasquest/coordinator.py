@@ -20,11 +20,11 @@ from homeassistant.util import dt as dt_util
 
 from .app_client import TaskAsQuestClient
 from .const import (
+    BURST_THRESHOLD,
+    BURST_WINDOW_SECONDS,
     CONF_AUTH_TOKEN,
     CONF_USER_ID,
     DEFAULT_UPDATE_INTERVAL,
-    BURST_WINDOW_SECONDS,
-    BURST_THRESHOLD,
     DOMAIN,
     RULE_ASSIGNEES,
     RULE_COOLDOWN,
@@ -224,7 +224,7 @@ class TaskAsQuestCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             
         if len(pending_ids) > BURST_THRESHOLD:
             _LOGGER.warning(
-                "Burst protection triggered: %d rules triggered within %d seconds. Canceling all to prevent quest flood.",
+                "Burst protection: %d rules triggered in %d seconds. Canceling all.",
                 len(pending_ids),
                 BURST_WINDOW_SECONDS,
             )
