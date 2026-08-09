@@ -46,28 +46,6 @@ class TaskAsQuestDashboardView(HomeAssistantView):
         return entry
 
     async def get(self, request: web.Request) -> web.Response:
-        """Return entries, configured rules and the current quest snapshot."""
-        self._require_admin(request)
-        entries: list[dict[str, Any]] = []
-        for entry in self.hass.config_entries.async_entries(DOMAIN):
-            coordinator = entry.runtime_data if entry.state is ConfigEntryState.LOADED else None
-            data = coordinator.data if coordinator else {}
-            entries.append(
-                {
-                    "entry_id": entry.entry_id,
-                    "title": entry.title or entry.data.get(CONF_LOGIN_NAME, "Task as Quest"),
-                    "loaded": entry.state is ConfigEntryState.LOADED,
-                    "rules": list(entry.options.get(CONF_RULES, [])),
-                    "open_tasks": list((data or {}).get("open_tasks", [])),
-                    "open_task_count": int((data or {}).get("open_task_count", 0)),
-                    "tasks_created_total": int((data or {}).get("tasks_created_total", 0)),
-                }
-            )
-        return web.json_response({"entries": entries})
-
-    async def post(self, request: web.Request) -> web.Response:
-        """Create, update, toggle or remove a rule without exposing credentials."""
-        self._require_admin(request)
         payload = await request.json()
         if not isinstance(payload, dict):
             raise web.HTTPBadRequest(reason="Expected a JSON object")
@@ -147,7 +125,7 @@ async def async_register_dashboard(hass: HomeAssistant) -> None:
         config={
             "_panel_custom": {
                 "name": "taskasquest-panel",
-                "module_url": f"/{DOMAIN}/taskasquest-panel.js?v=3.1.11",
+                "module_url": f"/{DOMAIN}/taskasquest-panel.js?v=3.1.14",
                 "embed_iframe": False,
             }
         },
