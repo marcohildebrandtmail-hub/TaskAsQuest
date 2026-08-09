@@ -172,11 +172,12 @@ class TaskAsQuestCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._rule_unsubscribe:
             self._rule_unsubscribe()
             self._rule_unsubscribe = None
-        entity_ids = {
-            rule[RULE_ENTITY_ID]
-            for rule in self.rules
-            if rule.get(RULE_ENABLED, True) and rule.get(RULE_ENTITY_ID)
-        }
+        entity_ids = set()
+        for rule in self.rules:
+            if not rule.get(RULE_ENABLED, True) or not rule.get(RULE_ENTITY_ID):
+                continue
+            for eid in [e.strip() for e in rule[RULE_ENTITY_ID].split(",") if e.strip()]:
+                entity_ids.add(eid)
         if entity_ids:
             self._rule_unsubscribe = async_track_state_change_event(
                 self.hass,
@@ -267,9 +268,11 @@ class TaskAsQuestCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         matching_rules: list[dict[str, Any]] = []
         for rule in self.rules:
+            raw_entities = rule.get(RULE_ENTITY_ID, "").split(",")
+            rule_entities = [e.strip() for e in raw_entities if e.strip()]
             if (
                 not rule.get(RULE_ENABLED, True)
-                or rule.get(RULE_ENTITY_ID) != entity_id
+                or entity_id not in rule_entities
                 or not rule_matches(rule, new_state.state)
             ):
                 continue
@@ -301,14 +304,22 @@ class TaskAsQuestCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             open_tasks = await self.client.get_open_tasks()
             created = 0
             if self._rules_armed:
-                level_rules = [
-                    rule
-                    for rule in self.rules
-                    if rule.get(RULE_ENABLED, True)
-                    and rule.get(RULE_TRIGGER_MODE, "level") == "level"
-                    and (state := self.hass.states.get(rule.get(RULE_ENTITY_ID, ""))) is not None
-                    and rule_matches(rule, state.state)
-                ]
+                level_rules = []
+                for rule in self.rules:
+                    enabled = rule.get(RULE_ENABLED, True)
+                    is_level = rule.get(RULE_TRIGGER_MODE, "level") == "level"
+                    if not enabled or not is_level:
+                        continue
+                    
+                    raw_entities = rule.get(RULE_ENTITY_ID, "").split(",")
+                    rule_entities = [e.strip() for e in raw_entities if e.strip()]
+                    
+                    if any(
+                        (state := self.hass.states.get(eid)) is not None
+                        and rule_matches(rule, state.state)
+                        for eid in rule_entities
+                    ):
+                        level_rules.append(rule)
                 if level_rules:
                     self._async_queue_rules(level_rules)
             self.open_task_count = len(open_tasks)
