@@ -225,11 +225,10 @@ class TaskAsQuestCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             
         if len(pending_ids) > BURST_THRESHOLD:
             _LOGGER.warning(
-                "Burst protection: %d rules triggered in %d seconds. Canceling all.",
+                "Burst protection: batching %d rules triggered in %d seconds.",
                 len(pending_ids),
                 BURST_WINDOW_SECONDS,
             )
-            return
             
         rules_to_evaluate = [rule for rule in self.rules if rule.get(RULE_ID) in pending_ids]
         if not rules_to_evaluate:

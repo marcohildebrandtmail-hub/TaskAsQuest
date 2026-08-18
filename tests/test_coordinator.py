@@ -99,3 +99,40 @@ async def test_level_rule_waits_for_startup_grace_before_creating_quest(
     await hass.async_block_till_done()
 
     client.create_task.assert_awaited_once()
+
+
+async def test_burst_of_rules_is_batched_without_discarding_matches(
+    hass: HomeAssistant,
+) -> None:
+    """Several simultaneous matches must not make all quests disappear."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_APP_URL: "https://example.test", CONF_PASSWORD: "password"},
+    )
+    entry.add_to_hass(hass)
+    client = MagicMock()
+    client.create_task = AsyncMock(
+        side_effect=lambda title, **_kwargs: {"id": title, "title": title}
+    )
+    rules = [
+        normalize_rule(
+            {
+                RULE_ENTITY_ID: f"binary_sensor.test_{index}",
+                RULE_CONDITION: "equals",
+                RULE_VALUE: "on",
+                RULE_TASK_TITLE: f"Check sensor {index}",
+                RULE_COOLDOWN: 0,
+                RULE_DUE_DATE_OFFSET: "-1",
+            }
+        )
+        for index in range(4)
+    ]
+    coordinator = TaskAsQuestCoordinator(hass, entry, client, rules)
+    coordinator._rules_armed = True
+
+    with patch.object(coordinator._store, "async_save", AsyncMock()):
+        coordinator._async_queue_rules(rules)
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=35))
+        await hass.async_block_till_done()
+
+    assert client.create_task.await_count == 4
