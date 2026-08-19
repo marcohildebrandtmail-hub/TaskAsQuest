@@ -303,11 +303,21 @@ class TaskAsQuestOptionsFlow(config_entries.OptionsFlow):
     ) -> config_entries.ConfigFlowResult:
         """Select the entity for a new rule."""
         if user_input is not None:
-            self._current_entity_id = user_input[RULE_ENTITY_ID]
+            raw_entity = user_input[RULE_ENTITY_ID]
+            if isinstance(raw_entity, list):
+                self._current_entity_id = ", ".join(raw_entity[:3])
+            else:
+                self._current_entity_id = str(raw_entity)
             return await self.async_step_add_rule_details()
         return self.async_show_form(
             step_id="add_rule",
-            data_schema=vol.Schema({vol.Required(RULE_ENTITY_ID): selector.EntitySelector()}),
+            data_schema=vol.Schema(
+                {
+                    vol.Required(RULE_ENTITY_ID): selector.EntitySelector(
+                        selector.EntitySelectorConfig(multiple=True)
+                    )
+                }
+            ),
         )
 
     async def _get_form_schema(
@@ -321,9 +331,10 @@ class TaskAsQuestOptionsFlow(config_entries.OptionsFlow):
         self._form_error = {}
         try:
             coordinator = self._config_entry.runtime_data
-            companions = await coordinator.client.get_companions()
-        except (AttributeError, TaskAsQuestError):
-            self._form_error["base"] = "cannot_load_companions"
+            if coordinator and hasattr(coordinator, "client"):
+                companions = await coordinator.client.get_companions()
+        except (AttributeError, TaskAsQuestError, Exception):
+            pass
 
         selected_assignees = rule.get(RULE_ASSIGNEES, [])
         for companion_id in selected_assignees:
@@ -334,14 +345,22 @@ class TaskAsQuestOptionsFlow(config_entries.OptionsFlow):
         ]
 
         due_date_options = [
-            selector.SelectOptionDict(value="-1", label="No due date"),
-            selector.SelectOptionDict(value="0", label="Today at 23:59"),
-            selector.SelectOptionDict(value="1", label="Tomorrow at 23:59"),
-            selector.SelectOptionDict(value="2", label="In 2 days"),
-            selector.SelectOptionDict(value="3", label="In 3 days"),
-            selector.SelectOptionDict(value="7", label="In 7 days"),
-            selector.SelectOptionDict(value="100", label="Today, or tomorrow after 18:00"),
+            selector.SelectOptionDict(value="-1", label="Keine Fälligkeit / No due date"),
+            selector.SelectOptionDict(value="0", label="Heute (23:59) / Today"),
+            selector.SelectOptionDict(value="1", label="Morgen (23:59) / Tomorrow"),
+            selector.SelectOptionDict(value="2", label="In 2 Tagen / In 2 days"),
+            selector.SelectOptionDict(value="3", label="In 3 Tagen / In 3 days"),
+            selector.SelectOptionDict(value="7", label="In 7 Tagen / In 7 days"),
+            selector.SelectOptionDict(value="100", label="Auto (Heute / ab 18:00 Uhr Morgen)"),
         ]
+
+        first_entity = entity_id.split(",")[0].strip() if entity_id else None
+        value_selector = (
+            selector.StateSelector(selector.StateSelectorConfig(entity_id=first_entity))
+            if first_entity and "," not in entity_id
+            else selector.TextSelector()
+        )
+
         schema: dict[Any, Any] = {
             vol.Required(
                 RULE_CONDITION,
@@ -355,7 +374,7 @@ class TaskAsQuestOptionsFlow(config_entries.OptionsFlow):
             vol.Required(
                 RULE_VALUE,
                 default=rule.get(RULE_VALUE, vol.UNDEFINED),
-            ): selector.StateSelector(selector.StateSelectorConfig(entity_id=entity_id)),
+            ): value_selector,
             vol.Required(
                 RULE_TASK_TITLE,
                 default=rule.get(RULE_TASK_TITLE, vol.UNDEFINED),
