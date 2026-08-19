@@ -153,7 +153,7 @@ async def async_register_dashboard(hass: HomeAssistant) -> None:
         config={
             "_panel_custom": {
                 "name": "taskasquest-panel",
-                "module_url": f"/{DOMAIN}/taskasquest-panel.js?v=3.2.4",
+                "module_url": f"/{DOMAIN}/taskasquest-panel.js?v=3.2.5",
                 "embed_iframe": False,
             }
         },

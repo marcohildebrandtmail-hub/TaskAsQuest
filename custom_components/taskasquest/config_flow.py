@@ -311,13 +311,7 @@ class TaskAsQuestOptionsFlow(config_entries.OptionsFlow):
             return await self.async_step_add_rule_details()
         return self.async_show_form(
             step_id="add_rule",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(RULE_ENTITY_ID): selector.EntitySelector(
-                        selector.EntitySelectorConfig(multiple=True)
-                    )
-                }
-            ),
+            data_schema=vol.Schema({vol.Required(RULE_ENTITY_ID): selector.EntitySelector()}),
         )
 
     async def _get_form_schema(
