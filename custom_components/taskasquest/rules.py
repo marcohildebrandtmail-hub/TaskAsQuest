@@ -33,8 +33,12 @@ def normalize_rule(
     """Return a validated, serializable rule while retaining compatibility."""
     normalized = dict(rule)
     normalized[RULE_ID] = str(rule.get(RULE_ID) or uuid4())
-    entity_str = str(rule.get(RULE_ENTITY_ID) or "")
-    entities = [e.strip() for e in entity_str.split(",") if e.strip()]
+    raw_entity = rule.get(RULE_ENTITY_ID)
+    if isinstance(raw_entity, list):
+        entities = [str(e).strip() for e in raw_entity if str(e).strip()]
+    else:
+        entity_str = str(raw_entity or "")
+        entities = [e.strip() for e in entity_str.split(",") if e.strip()]
     normalized[RULE_ENTITY_ID] = ", ".join(entities[:3])
     condition = str(rule.get(RULE_CONDITION) or "equals")
     normalized[RULE_CONDITION] = condition if condition in CONDITIONS else "equals"
