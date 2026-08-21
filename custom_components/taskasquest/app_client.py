@@ -481,6 +481,8 @@ class TaskAsQuestClient:
             assignee_payload: dict[str, Any] = {
                 "task": task_id,
                 "user": companion_id,
+                # The app editor preserves explicit functional roles for companions.
+                "role": "shared",
             }
             if self.protection_version == 1:
                 if not self.protected_fields or not quest_key or companion_id not in public_keys:

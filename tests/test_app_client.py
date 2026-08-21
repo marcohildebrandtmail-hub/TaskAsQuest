@@ -130,3 +130,37 @@ async def test_open_task_batch_decryption_uses_one_executor_job() -> None:
     executor_job.assert_awaited_once()
     assert [task["title"] for task in tasks] == ["decrypted", "decrypted"]
     assert protected_fields.decrypt_task_read.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_create_task_marks_origin_and_assigns_companion_as_shared() -> None:
+    """The Home Assistant marker and alliance role have separate meanings."""
+    async with aiohttp.ClientSession() as session:
+        client = TaskAsQuestClient(BASE_URL, session)
+        client.user_id = "owner"
+        client.protection_version = 0
+        client._request = AsyncMock(
+            side_effect=[
+                {"id": "task-1"},
+                {"id": "marker-1"},
+                {"id": "assignment-1"},
+            ]
+        )
+
+        await client.create_task(
+            "Alliance quest",
+            assignees=["friend"],
+            notify_app=True,
+        )
+
+    requests = client._request.await_args_list
+    assert requests[1].kwargs["json"] == {
+        "task": "task-1",
+        "user": "owner",
+        "role": "ha",
+    }
+    assert requests[2].kwargs["json"] == {
+        "task": "task-1",
+        "user": "friend",
+        "role": "shared",
+    }
