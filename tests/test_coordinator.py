@@ -11,6 +11,8 @@ from custom_components.taskasquest.const import (
     CONF_APP_URL,
     CONF_PASSWORD,
     DOMAIN,
+    MASS_OUTAGE_RULE_ID,
+    MASS_OUTAGE_TASK_TITLE,
     RULE_CONDITION,
     RULE_COOLDOWN,
     RULE_DUE_DATE_OFFSET,
@@ -101,10 +103,10 @@ async def test_level_rule_waits_for_startup_grace_before_creating_quest(
     client.create_task.assert_awaited_once()
 
 
-async def test_burst_of_rules_is_batched_without_discarding_matches(
+async def test_burst_of_rules_creates_one_consolidated_mass_outage(
     hass: HomeAssistant,
 ) -> None:
-    """Several simultaneous matches must not make all quests disappear."""
+    """Several simultaneous matches create one quest instead of a flood."""
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={CONF_APP_URL: "https://example.test", CONF_PASSWORD: "password"},
@@ -135,4 +137,71 @@ async def test_burst_of_rules_is_batched_without_discarding_matches(
         async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=35))
         await hass.async_block_till_done()
 
-    assert client.create_task.await_count == 4
+    client.create_task.assert_awaited_once()
+    args = client.create_task.await_args
+    assert args.args[0] == MASS_OUTAGE_TASK_TITLE
+    assert "4 Regeln" in args.kwargs["description"]
+    assert "keine einzelnen Gerätequests" in args.kwargs["description"]
+
+
+async def test_mass_outage_is_not_recreated_while_quest_is_open(
+    hass: HomeAssistant,
+) -> None:
+    """A continuing infrastructure outage does not create recurring quests."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_APP_URL: "https://example.test", CONF_PASSWORD: "password"},
+    )
+    entry.add_to_hass(hass)
+    client = MagicMock()
+    client.create_task = AsyncMock(
+        return_value={"id": "mass-outage", "title": MASS_OUTAGE_TASK_TITLE}
+    )
+    rules = [
+        normalize_rule(
+            {
+                RULE_ENTITY_ID: f"sensor.zigbee_{index}_last_seen",
+                RULE_CONDITION: "equals",
+                RULE_VALUE: "unavailable",
+                RULE_TASK_TITLE: f"Zigbee device {index} unavailable",
+                RULE_COOLDOWN: 0,
+                RULE_DUE_DATE_OFFSET: "-1",
+            }
+        )
+        for index in range(4)
+    ]
+    coordinator = TaskAsQuestCoordinator(hass, entry, client, rules)
+    open_tasks: list[dict] = []
+
+    with patch.object(coordinator._store, "async_save", AsyncMock()):
+        assert await coordinator._async_create_mass_outage(rules, open_tasks) == 1
+        assert await coordinator._async_create_mass_outage(rules, open_tasks) == 0
+        open_tasks.clear()
+        assert await coordinator._async_create_mass_outage(rules, open_tasks) == 0
+
+    client.create_task.assert_awaited_once()
+
+
+async def test_mass_outage_cooldown_is_restored_after_restart(
+    hass: HomeAssistant,
+) -> None:
+    """The persisted outage cooldown survives an integration restart."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_APP_URL: "https://example.test", CONF_PASSWORD: "password"},
+    )
+    entry.add_to_hass(hass)
+    coordinator = TaskAsQuestCoordinator(hass, entry, MagicMock(), [])
+
+    with patch.object(
+        coordinator._store,
+        "async_load",
+        AsyncMock(
+            return_value={
+                "last_created_by_rule": {MASS_OUTAGE_RULE_ID: 12345.0},
+            }
+        ),
+    ):
+        await coordinator._async_setup()
+
+    assert coordinator._last_created_by_rule[MASS_OUTAGE_RULE_ID] == 12345.0

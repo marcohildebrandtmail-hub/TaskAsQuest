@@ -26,6 +26,9 @@ from .const import (
     CONF_USER_ID,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
+    MASS_OUTAGE_COOLDOWN_SECONDS,
+    MASS_OUTAGE_RULE_ID,
+    MASS_OUTAGE_TASK_TITLE,
     RULE_ASSIGNEES,
     RULE_COOLDOWN,
     RULE_DIFFICULTY,
@@ -97,6 +100,7 @@ class TaskAsQuestCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         cooldowns = stored.get("last_created_by_rule", {})
         if isinstance(cooldowns, dict):
             active_rule_ids = {rule[RULE_ID] for rule in self.rules}
+            active_rule_ids.add(MASS_OUTAGE_RULE_ID)
             self._last_created_by_rule = {
                 str(rule_id): float(timestamp)
                 for rule_id, timestamp in cooldowns.items()
@@ -214,7 +218,7 @@ class TaskAsQuestCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @callback
     def _async_process_pending_rules(self, _now: datetime | None = None) -> None:
-        """Process or cancel queued rules."""
+        """Process queued rules as individual or consolidated outage quests."""
         self._burst_timer_unsubscribe = None
         
         pending_ids = self._pending_rules.copy()
@@ -223,22 +227,109 @@ class TaskAsQuestCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if not pending_ids:
             return
             
-        if len(pending_ids) > BURST_THRESHOLD:
-            _LOGGER.warning(
-                "Burst protection: batching %d rules triggered in %d seconds.",
-                len(pending_ids),
-                BURST_WINDOW_SECONDS,
-            )
-            
         rules_to_evaluate = [rule for rule in self.rules if rule.get(RULE_ID) in pending_ids]
         if not rules_to_evaluate:
             return
+
+        if len(rules_to_evaluate) > BURST_THRESHOLD:
+            _LOGGER.warning(
+                "Mass outage detected: consolidating %d rules triggered in %d seconds.",
+                len(rules_to_evaluate),
+                BURST_WINDOW_SECONDS,
+            )
+            task_name = f"{DOMAIN} consolidated outage evaluation"
+            coroutine = self._async_execute_mass_outage(rules_to_evaluate)
+        else:
+            task_name = f"{DOMAIN} delayed rule evaluation"
+            coroutine = self._async_execute_queued_rules(rules_to_evaluate)
             
         self.config_entry.async_create_background_task(
             self.hass,
-            self._async_execute_queued_rules(rules_to_evaluate),
-            f"{DOMAIN} delayed rule evaluation",
+            coroutine,
+            task_name,
         )
+
+    async def _async_execute_mass_outage(self, rules: list[dict[str, Any]]) -> None:
+        """Create one quest for a burst instead of one quest per affected rule."""
+        if not self._rules_armed:
+            return
+
+        try:
+            tasks = list((self.data or {}).get("open_tasks", []))
+            created = await self._async_create_mass_outage(rules, tasks)
+            if created:
+                self.open_task_count = len(tasks)
+                self.async_set_updated_data(self._coordinator_data(tasks, created))
+        except TaskAsQuestAuthenticationError:
+            self.config_entry.async_start_reauth(self.hass)
+        except TaskAsQuestError as err:
+            _LOGGER.warning("Task as Quest mass outage evaluation failed: %s", err)
+
+    async def _async_create_mass_outage(
+        self,
+        rules: list[dict[str, Any]],
+        open_tasks: list[dict[str, Any]],
+    ) -> int:
+        """Create and persist one consolidated quest for a mass outage."""
+        async with self._rule_lock:
+            open_titles = {
+                task.get("title")
+                for task in open_tasks
+                if isinstance(task.get("title"), str)
+            }
+            if MASS_OUTAGE_TASK_TITLE in open_titles:
+                return 0
+
+            now = time.time()
+            last_created = self._last_created_by_rule.get(MASS_OUTAGE_RULE_ID, 0)
+            if now - last_created < MASS_OUTAGE_COOLDOWN_SECONDS:
+                return 0
+
+            affected_titles = sorted(
+                {
+                    str(rule.get(RULE_TASK_TITLE)).strip()
+                    for rule in rules
+                    if rule.get(RULE_TASK_TITLE)
+                }
+            )
+            preview = affected_titles[:10]
+            description_lines = [
+                (
+                    f"{len(rules)} Regeln haben innerhalb von "
+                    f"{BURST_WINDOW_SECONDS} Sekunden ausgelöst."
+                ),
+                "Es wurden keine einzelnen Gerätequests erstellt.",
+            ]
+            if preview:
+                description_lines.extend(["", "Betroffene Regeln:"])
+                description_lines.extend(f"- {title}" for title in preview)
+            if len(affected_titles) > len(preview):
+                description_lines.append(
+                    f"- und {len(affected_titles) - len(preview)} weitere"
+                )
+
+            assignees = sorted(
+                {
+                    str(assignee)
+                    for rule in rules
+                    for assignee in rule.get(RULE_ASSIGNEES, [])
+                    if assignee
+                }
+            )
+            task = await self.client.create_task(
+                MASS_OUTAGE_TASK_TITLE,
+                difficulty="hard",
+                description="\n".join(description_lines),
+                due_date=None,
+                assignees=assignees,
+                notify_app=any(rule.get(RULE_NOTIFY_APP, True) for rule in rules),
+            )
+            open_tasks.append(task)
+            self.tasks_created_total += 1
+            self.last_task_created = MASS_OUTAGE_TASK_TITLE
+            self._last_created_by_rule[MASS_OUTAGE_RULE_ID] = now
+            await self._async_save_state()
+            return 1
 
     async def _async_execute_queued_rules(self, rules: list[dict[str, Any]]) -> None:
         """Execute the rules after the burst window."""
